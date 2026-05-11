@@ -1262,10 +1262,12 @@ function completeTask(task){
 let resourceSearchState = {topic:'',results:[],isSearching:false,selected:null,sortBy:'matchScore',filterType:'all'};
 
 async function openResourceSearchPage(topic, freshSearch=false){
+  // Save context so we can restore if page reloads
+  D._searchContext = {topic, freshSearch, wizardStep:wizardState.step};
+  save();
   resourceSearchState = {topic,results:[],isSearching:true,selected:null,sortBy:'matchScore',filterType:'all'};
   document.getElementById('resourceSearchModal').style.display = 'flex';
   renderResourceSearch();
-  // Force fresh search
   if(freshSearch){ D.resourceCache['search_'+topic] = null; save(); }
   const results = await searchResources(topic, freshSearch);
   resourceSearchState.results = results; resourceSearchState.isSearching = false;
@@ -1283,7 +1285,7 @@ function renderResourceSearch(){
   else filtered.sort((a,b)=>(b.matchScore||0)-(a.matchScore||0));
 
   const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <button onclick="document.getElementById('resourceSearchModal').style.display='none';document.getElementById('wizardModal').style.display='flex';renderWizard()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer">← 返回向导</button>
+    <button onclick="D._searchContext=null;save();document.getElementById('resourceSearchModal').style.display='none';document.getElementById('wizardModal').style.display='flex';renderWizard()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer">← 返回向导</button>
     <h2 style="font-size:16px;margin:0">🔍 搜索学习资源</h2>
     <span></span></div>
   <div class="form-group"><input class="input" id="resSearchInput" value="${st.topic}" onchange="resourceSearchState.topic=this.value"><button class="btn btn-sm btn-purple" style="margin-top:8px" onclick="resourceSearchState.isSearching=true;renderResourceSearch();searchResources(resourceSearchState.topic).then(r=>{resourceSearchState.results=r;resourceSearchState.isSearching=false;renderResourceSearch()})">🔍 重新搜索</button></div>
@@ -2079,7 +2081,7 @@ document.querySelectorAll('.bottom-nav button').forEach(btn=>{
     if(btn.dataset.page==='settings'){ renderSettings(); runDiagnostics(); }
   });
 });
-document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o){o.style.display='none';if(o.id==='resourceSearchModal'){document.getElementById('wizardModal').style.display='flex';renderWizard();}}});});
+document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o){o.style.display='none';if(o.id==='resourceSearchModal'){D._searchContext=null;save();document.getElementById('wizardModal').style.display='flex';renderWizard();}}});});
 function toast(msg){
   const el=document.createElement('div'); el.className='toast'; el.textContent=msg;
   document.getElementById('toastContainer').appendChild(el); setTimeout(()=>el.remove(),2500);
@@ -2099,6 +2101,13 @@ function init(){
     startOnboarding();
   } else {
     renderAll();
+    // Restore search page if browser reloaded while searching
+    if(D._searchContext && D._searchContext.topic){
+      const ctx = D._searchContext;
+      wizardState.step = ctx.wizardStep || 6;
+      setTimeout(() => openResourceSearchPage(ctx.topic, false), 800);
+      D._searchContext = null; save();
+    }
   }
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').then(reg => {
