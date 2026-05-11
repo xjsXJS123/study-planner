@@ -1,7 +1,7 @@
-const CACHE_NAME = 'studybuddy-v3.0';
+const CACHE_NAME = 'studybuddy-v3.2-' + Date.now();
 const ASSETS = ['./index.html', './manifest.json'];
 
-// Install - cache new assets, take control immediately
+// Install
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(c => c.addAll(ASSETS))
@@ -9,22 +9,30 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-// Activate - delete ALL old caches, claim all clients
+// Activate - delete ALL old caches aggressively
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.map(key => {
-        if (key !== CACHE_NAME) {
-          console.log('[SW] Deleting old cache:', key);
-          return caches.delete(key);
-        }
-      }))
-    )
+      Promise.all(
+        keys.map(key => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      )
+    ).then(() => {
+      // Force all clients to refresh
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({ type: 'CACHE_CLEARED' });
+        });
+      });
+    })
   );
   self.clients.claim();
 });
 
-// Fetch - network first with cache fallback
+// Fetch - network first
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
@@ -38,4 +46,14 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(e.request))
   );
+});
+
+// Listen for messages from page
+self.addEventListener('message', e => {
+  if (e.data === 'skipWaiting') {
+    self.skipWaiting();
+  }
+  if (e.data === 'clearAll') {
+    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
+  }
 });

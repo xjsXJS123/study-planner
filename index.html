@@ -1578,7 +1578,29 @@ function init(){
   } else {
     renderAll();
   }
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // If there's a waiting worker, tell it to activate and reload
+      if(reg.waiting){ reg.waiting.postMessage('skipWaiting'); window.location.reload(); }
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+            newWorker.postMessage('skipWaiting');
+            // Clear old caches and reload
+            if(newWorker.postMessage) newWorker.postMessage('clearAll');
+            setTimeout(() => window.location.reload(), 500);
+          }
+        });
+      });
+    }).catch(()=>{});
+    // Listen for cache cleared message
+    navigator.serviceWorker.addEventListener('message', e => {
+      if(e.data && e.data.type === 'CACHE_CLEARED'){
+        window.location.reload();
+      }
+    });
+  }
   if('Notification' in window && Notification.permission==='default') Notification.requestPermission();
 }
 document.addEventListener('DOMContentLoaded', init);
