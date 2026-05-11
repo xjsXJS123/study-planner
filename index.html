@@ -280,8 +280,12 @@ body{
 <!-- Modal: Achievement Unlock -->
 <div class="modal-overlay" id="achievementModal" style="display:none"><div class="modal" style="text-align:center"><div style="font-size:64px;animation:popIn .5s ease" id="achieveIcon">🏆</div><h2 style="color:var(--gold);margin:8px 0" id="achieveTitle"></h2><p style="color:var(--text2)" id="achieveDesc"></p><p style="color:var(--purple-light);font-size:13px;margin-top:4px" id="achieveReward"></p><button class="btn btn-gold btn-block" style="margin-top:16px" onclick="document.getElementById('achievementModal').style.display='none'">太棒了！</button></div></div>
 
+<!-- Modal: Course Detail -->
+<div class="modal-overlay" id="courseModal" style="display:none"><div class="modal" id="courseInner" style="max-height:90vh"></div></div>
 <!-- Modal: Syllabus Editor -->
 <div class="modal-overlay" id="syllabusModal" style="display:none"><div class="modal" id="syllabusInner"></div></div>
+<!-- Modal: Resource Search -->
+<div class="modal-overlay" id="resourceSearchModal" style="display:none"><div class="modal" id="resourceSearchInner" style="max-height:90vh"></div></div>
 
 <!-- Toast -->
 <div id="toastContainer"></div>
@@ -1020,6 +1024,55 @@ function completeTask(task){
   renderAll();
 }
 
+// ═══════════════ COURSE DETAIL WRAPPER ═══════════════
+function openCourseDetail(planId, taskId){
+  const plan = D.plans.find(p=>p.id===planId);
+  const task = D.tasks.find(t=>t.id===taskId);
+  if(!plan||!task) return;
+  const res = plan.selectedResource ? JSON.parse(plan.selectedResource) : null;
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <button onclick="document.getElementById('courseModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer">←</button>
+    <span class="tag tag-purple">${plan.topicName}</span>
+  </div>
+  <h3 style="font-size:17px;margin-bottom:4px">📖 ${task.title}</h3>
+  ${task.resRef?`<p style="font-size:13px;color:var(--purple-light);margin-bottom:8px">📍 ${task.resRef}</p>`:''}
+  ${res?`<p style="font-size:12px;color:var(--text2);margin-bottom:12px">资源：${res.name} · ${res.author||''}</p>`:''}
+
+  <!-- External link button -->
+  ${res&&res.url?`<a href="${res.url}" target="_blank" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;padding:10px 16px;background:rgba(124,58,237,0.1);border-radius:12px;text-decoration:none;color:var(--purple-light);font-size:13px;margin-bottom:16px">📺 打开原视频/课程链接 → <span style="font-size:11px;color:var(--text3)">（将在浏览器中打开）</span></a>`:''}
+
+  <!-- Concepts -->
+  ${task.concepts&&task.concepts.length>0?`
+  <div class="card"><h4 style="font-size:13px;color:var(--text2);margin-bottom:8px">核心概念</h4>
+    <div class="concept-tags">${task.concepts.map(c=>`<span class="concept-tag">${c}</span>`).join('')}</div>
+  </div>`:''}
+
+  <!-- Content summary -->
+  <div class="card">
+    <h4 style="font-size:13px;color:var(--text2);margin-bottom:8px">📝 内容摘要 ${plan.isPersonalized?'<span class="tag tag-gold" style="font-size:10px">AI 生成</span>':''}</h4>
+    <p style="font-size:13px;line-height:1.7;color:var(--text)">${task.desc||'暂无摘要'}</p>
+    ${task.estMin?`<p style="font-size:12px;color:var(--text3);margin-top:8px">⏱ 预计学习时长：${task.estMin} 分钟</p>`:''}
+  </div>
+
+  <!-- Resource reference -->
+  ${task.resRef?`
+  <div class="card" style="border-color:var(--purple)">
+    <h4 style="font-size:13px;color:var(--text2);margin-bottom:4px">📌 参考资源定位</h4>
+    <p style="font-size:13px;color:var(--text)">${task.resRef}</p>
+  </div>`:''}
+
+  <!-- Actions -->
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn btn-purple btn-block" onclick="document.getElementById('courseModal').style.display='none';openFeynman('${planId}','${(task.concepts||['概念'])[0]}')">🎓 费曼挑战</button>
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('courseModal').style.display='none';openExercises('${planId}','${task.id}')">📝 课后习题</button>
+  </div>
+  ${!task.completed?`<button class="btn btn-gold btn-block" style="margin-top:8px" onclick="document.getElementById('courseModal').style.display='none';toggleTask('${taskId}')">✅ 完成学习</button>`:''}`;
+
+  document.getElementById('courseInner').innerHTML = html;
+  document.getElementById('courseModal').style.display = 'flex';
+}
+
 // ═══════════════ SYLLABUS EDITOR ═══════════════
 function openSyllabusEditor(planId){
   const plan = D.plans.find(p=>p.id===planId);
@@ -1471,17 +1524,17 @@ function openPlanDetail(planId){
     html += '<p style="color:var(--text3);font-size:14px;margin-bottom:12px">今天没有任务～</p>';
   } else {
     html += todayTasks.map(t=>`
-      <div class="task-item ${t.completed?'completed':''}" style="${t.type==='skipped'?'opacity:0.3':''}">
+      <div class="task-item ${t.completed?'completed':''}" style="${t.type==='skipped'?'opacity:0.3':''};cursor:pointer" onclick="${t.type==='new_content'?`openCourseDetail('${planId}','${t.id}')`:`toggleTask('${t.id}')`}">
         <div class="task-checkbox ${t.completed?'done':''}" onclick="event.stopPropagation();toggleTask('${t.id}')">${t.completed?'✓':''}</div>
         <div class="task-info">
-          <div class="task-title">${t.title}</div>
-          <div class="task-meta">${t.desc} · ${t.estMin}min</div>
+          <div class="task-title">${t.title} ${t.type==='new_content'?'<span style="font-size:10px;color:var(--purple-light)">→</span>':''}</div>
+          <div class="task-meta">${t.desc} · ${t.estMin}min ${t.resRef?'· '+t.resRef:''}</div>
           <div class="concept-tags">${(t.concepts||[]).map(c=>`<span class="concept-tag">${c}</span>`).join('')}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
           <span style="font-size:11px;color:var(--text3)">${t.estMin}min</span>
-          ${!t.completed && t.type==='new_content'?`<button class="btn btn-sm btn-purple" style="font-size:11px" onclick="event.stopPropagation();openFeynman('${planId}','${(t.concepts||['概念'])[0]}')">🗣 费曼</button>`:''}
-          ${!t.completed && t.type==='new_content'?`<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="event.stopPropagation();openExercises('${planId}','${t.id}')">📝 习题</button>`:''}
+          ${!t.completed&&t.type==='new_content'?`<button class="btn btn-sm btn-purple" style="font-size:11px" onclick="event.stopPropagation();openFeynman('${planId}','${(t.concepts||['概念'])[0]}')">🗣</button>`:''}
+          ${!t.completed&&t.type==='new_content'?`<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="event.stopPropagation();openExercises('${planId}','${t.id}')">📝</button>`:''}
         </div>
       </div>`).join('');
   }
