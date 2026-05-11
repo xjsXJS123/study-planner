@@ -222,7 +222,7 @@ body{
 
 <!-- Page: Adventure -->
 <div class="page" id="page-adventure">
-  <h2 style="font-size:18px;margin-bottom:16px">⚔️ 冒险日志</h2>
+  <h2 style="font-size:18px;margin-bottom:16px">📊 学习数据</h2>
   <div class="card" style="text-align:center">
     <div style="font-size:64px" id="charEmoji">⚔️</div>
     <h3 id="charName" style="color:var(--gold)">学徒</h3>
@@ -231,8 +231,8 @@ body{
     <div style="margin-top:8px;font-size:12px;color:var(--text3)">技能点：<span id="skillPoints" style="color:var(--gold)">0</span></div>
   </div>
   <div class="card"><h3 style="font-size:14px;margin-bottom:8px">🔋 本周能量</h3><div class="energy-bar" id="energyBarLarge"></div><div style="font-size:12px;color:var(--text2)">碎片：<span id="fragments" style="color:var(--gold)">0</span></div></div>
-  <div class="card"><h3 style="font-size:14px;margin-bottom:12px">🌟 技能树</h3><div id="skillTree"></div></div>
-  <div class="card"><h3 style="font-size:14px;margin-bottom:12px">🏆 成就徽章</h3><div class="achieve-grid" id="achievementWall"></div></div>
+  <div class="card"><h3 style="font-size:14px;margin-bottom:12px">🧠 学习能力</h3><div id="skillTree"></div></div>
+  <div class="card"><h3 style="font-size:14px;margin-bottom:12px">🏆 里程碑</h3><div class="achieve-grid" id="achievementWall"></div></div>
   <div class="card" style="border-color:var(--purple)"><p style="font-size:13px;color:var(--purple-light);font-style:italic" id="adventureLog"></p></div>
 </div>
 
@@ -249,7 +249,7 @@ body{
 <!-- Bottom Nav -->
 <nav class="bottom-nav">
   <button class="active" data-page="plans"><span class="icon">📋</span>计划</button>
-  <button data-page="adventure"><span class="icon">⚔️</span>冒险</button>
+  <button data-page="adventure"><span class="icon">📊</span>进度</button>
   <button data-page="settings"><span class="icon">⚙️</span>设置</button>
 </nav>
 
@@ -454,9 +454,9 @@ function finishOnboarding(){
 // ═══════════════ CHARACTER CREATION ═══════════════
 function openCharacterCreation(){
   const chars = [
-    {key:'apprentice',e:'⚔️',n:'学徒',d:'均衡发展，适合初学者',s:'每日 XP +5%'},
-    {key:'ranger',e:'🏹',n:'游侠',d:'专注力强，学习效率高',s:'每日 XP +10%'},
-    {key:'mage',e:'🔮',n:'法师',d:'洞察力强，费曼评分加成',s:'费曼挑战 +5 XP'}
+    {key:'apprentice',e:'📗',n:'初级学者',d:'均衡发展，入门友好',s:'每日 XP +5%'},
+    {key:'ranger',e:'📘',n:'进阶学伴',d:'专注高效，适合有基础',s:'每日 XP +10%'},
+    {key:'mage',e:'📙',n:'深度学伴',d:'深度思考，费曼评分加成',s:'费曼挑战 +5 XP'}
   ];
   document.getElementById('charOptions').innerHTML = chars.map(c=>`<div class="card" style="cursor:pointer;text-align:center;border-color:${D.user.charClass===c.key?'var(--gold)':'var(--border)'}" onclick="selectCharacter('${c.key}')"><div style="font-size:48px">${c.e}</div><h3 style="color:var(--gold)">${c.n}</h3><p style="font-size:13px;color:var(--text2)">${c.d}</p><p style="font-size:12px;color:var(--purple-light)">${c.s}</p></div>`).join('');
   document.getElementById('charModal').style.display = 'flex';
@@ -467,7 +467,7 @@ function selectCharacter(cls){
   save();
   document.getElementById('charModal').style.display = 'none';
   renderAll();
-  toast(`✅ 选择了${cls==='apprentice'?'学徒':cls==='ranger'?'游侠':'法师'}！`);
+  toast(`✅ 已选择：${cls==='apprentice'?'初级学者':cls==='ranger'?'进阶学伴':'深度学伴'}`);
 }
 
 // ═══════════════ RPG ENGINE ═══════════════
@@ -1507,7 +1507,7 @@ function openPlanDetail(planId){
 
 function renderAdventure(){
   const u=D.user;
-  const chars={apprentice:{e:'⚔️',n:'学徒',d:'均衡发展'},ranger:{e:'🏹',n:'游侠',d:'专注力强，XP加成'},mage:{e:'🔮',n:'法师',d:'洞察力强，费曼加成'}};
+  const chars={apprentice:{e:'📗',n:'初级学者',d:'均衡发展'},ranger:{e:'📘',n:'进阶学伴',d:'专注高效'},mage:{e:'📙',n:'深度学伴',d:'深度思考'}};
   const ch=chars[u.charClass]||chars.apprentice;
   document.getElementById('charEmoji').textContent=ch.e;
   document.getElementById('charName').textContent=`${ch.n} · ${ch.d}`;
@@ -1519,10 +1519,10 @@ function renderAdventure(){
   document.getElementById('skillTree').innerHTML=[
     {key:'focus',icon:'🎯',name:'专注力',effect:`每日XP加成 +${u.skills.focus*5}%`,lv:u.skills.focus},
     {key:'memory',icon:'🧠',name:'记忆力',effect:`间隔重复间隔延长 ${u.skills.memory*10}%`,lv:u.skills.memory},
-    {key:'insight',icon:'🔍',name:'洞察力',effect:`费曼挑战评分门槛降低 ${u.skills.insight*5}%`,lv:u.skills.insight},
+    {key:'insight',icon:'🔍',name:'洞察力',effect:`费曼评分门槛降低 ${u.skills.insight*5}%`,lv:u.skills.insight},
   ].map(s=>`<div class="skill-row"><div class="skill-icon">${s.icon}</div><div class="skill-info"><div class="skill-name">${s.name}</div><div class="skill-effect">${s.effect}</div></div><div class="skill-level">Lv.${s.lv}</div>${u.skillPoints>0?`<button class="btn btn-sm btn-gold" onclick="upgradeSkill('${s.key}')">⬆</button>`:''}</div>`).join('');
   document.getElementById('achievementWall').innerHTML=ACHIEVEMENTS.map(a=>{const unlocked=D.achievements.includes(a.key);return`<div class="achieve-card ${unlocked?'unlocked':'locked'}"><div class="icon">${unlocked?a.icon:'🔒'}</div><div class="name">${unlocked?a.title:'???'}</div><div class="cond">${unlocked?a.reward:'需达成条件'}</div></div>`;}).join('');
-  document.getElementById('adventureLog').textContent=['⚔️ 今天的冒险旅程已经开启！每个任务都是升级路上的小怪，去击败它们！','🔮 法师的洞察力：温故而知新，别忘了间隔复习哦～','🏹 游侠的直觉：今天的学习任务中藏着不少宝藏概念！','⚔️ 学徒之路：每次费曼输出都是小Boss战！'][new Date().getDate()%4];
+  document.getElementById('adventureLog').textContent=['📊 本周学习节奏稳定，继续保持每日学习的习惯！','🧠 温故而知新，别忘了间隔复习哦～','📈 今天的学习任务中藏着不少重点概念，专注攻克！','📋 每次费曼输出都是一次知识内化的机会！'][new Date().getDate()%4];
 }
 
 function renderSettings(){
