@@ -449,42 +449,53 @@ function cancelBgTask(){
 async function deepseekCall(messages, opts={}){
   if(!D.apiKey){ return null; }
   if(!D.apiKey.startsWith('sk-')){
-    toast('⚠️ API Key 格式不正确（应以 sk- 开头），请在设置中重新配置');
+    toast('⚠️ Key 应以 sk- 开头，请到 platform.deepseek.com 获取');
     return null;
   }
   const { tools, maxTokens=1000, temperature=0.7 } = opts;
   const body = { model:MODEL, messages, max_tokens:maxTokens, temperature };
   if(tools) body.tools = tools;
 
-  // CORS note: Browser blocks direct API calls. Use proxy.
-  const CORS_PROXY = 'https://corsproxy.io/?';
-  const apiUrl = CORS_PROXY + encodeURIComponent(DEEPSEEK_URL);
+  const headers = {'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey};
 
+  // Try direct first - DeepSeek supports CORS!
+  let resp = null;
   try{
-    const resp = await fetch(apiUrl, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey},
-      body:JSON.stringify(body)
-    });
-    if(!resp.ok){
-      if(resp.status===402){ toast('💰 API 余额不足，请充值'); return null; }
-      if(resp.status===401){ toast('🔑 API Key 无效，请到 platform.deepseek.com 获取'); return null; }
-      toast('⚠️ API 错误 ('+resp.status+')，已切换本地模式');
-      return null;
-    }
-    const data = await resp.json();
-    if(data.usage){
-      D.tokenUsage.total = (D.tokenUsage.total||0)+(data.usage.total_tokens||0);
-      D.tokenUsage.count = (D.tokenUsage.count||0)+1; save();
-      const tokens = data.usage.total_tokens||0;
-      toast(`🤖 V4 Pro · ${tokens.toLocaleString()} Token ≈ ¥${(tokens/1000000).toFixed(4)}`);
-    }
-    return data;
+    resp = await fetch(DEEPSEEK_URL, {method:'POST',headers,body:JSON.stringify(body)});
   }catch(e){
-    console.log('API error:', e.message);
+    console.log('Direct call CORS/network error:', e.message);
+  }
+
+  // If direct failed, try proxy
+  if(!resp || !resp.ok){
+    try{
+      const proxyUrl = 'https://corsproxy.io/?'+encodeURIComponent(DEEPSEEK_URL);
+      resp = await fetch(proxyUrl, {method:'POST',headers,body:JSON.stringify(body)});
+    }catch(e2){
+      console.log('Proxy also failed:', e2.message);
+    }
+  }
+
+  if(!resp){
     toast('🌐 网络连接失败，使用本地资源库');
     return null;
   }
+
+  if(!resp.ok){
+    if(resp.status===402){ toast('💰 API 余额不足'); return null; }
+    if(resp.status===401){ toast('🔑 API Key 无效'); return null; }
+    toast('⚠️ API 错误('+resp.status+')，使用本地模式');
+    return null;
+  }
+
+  const data = await resp.json();
+  if(data.usage){
+    D.tokenUsage.total = (D.tokenUsage.total||0)+(data.usage.total_tokens||0);
+    D.tokenUsage.count = (D.tokenUsage.count||0)+1; save();
+    const tokens = data.usage.total_tokens||0;
+    toast(`🤖 V4 Pro · ${tokens.toLocaleString()} Token ≈ ¥${(tokens/1000000).toFixed(4)}`);
+  }
+  return data;
 }
 
 async function testApiConnection(){
