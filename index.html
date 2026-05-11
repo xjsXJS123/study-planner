@@ -444,26 +444,67 @@ function cancelBgTask(){
 }
 
 // ═══════════════ DEEPSEEK API ═══════════════
+let apiCallFailed = false; // Track if API is reachable
+
 async function deepseekCall(messages, opts={}){
   if(!D.apiKey) return null;
   const { tools, maxTokens=1000, temperature=0.7 } = opts;
   const body = { model:MODEL, messages, max_tokens:maxTokens, temperature };
   if(tools) body.tools = tools;
+
+  const doFetch = async (url) => {
+    return fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey},
+      body:JSON.stringify(body)
+    });
+  };
+
+  // Try direct call first
+  let resp = null;
+  let lastError = '';
   try{
-    const resp = await fetch(DEEPSEEK_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey}, body:JSON.stringify(body) });
+    resp = await doFetch(DEEPSEEK_URL);
     if(!resp.ok){
-      if(resp.status===402){ toast('💰 API 余额不足，已切换本地模式'); return null; }
-      return null;
+      if(resp.status===402){ toast('💰 API 余额不足，请充值后重试'); apiCallFailed=true; return null; }
+      if(resp.status===401){ toast('🔑 API Key 无效，请检查设置'); apiCallFailed=true; return null; }
+      lastError = 'HTTP '+resp.status;
     }
-    const data = await resp.json();
-    // Track token usage
-    if(data.usage){
-      D.tokenUsage.total = (D.tokenUsage.total||0) + (data.usage.total_tokens||0);
-      D.tokenUsage.count = (D.tokenUsage.count||0) + 1;
-      save();
+  }catch(e){
+    lastError = e.message||'网络错误';
+    console.log('Direct API call failed:', lastError);
+  }
+
+  // If direct call failed (CORS/network), try CORS proxy
+  if(!resp || !resp.ok){
+    try{
+      const proxyUrl = 'https://corsproxy.io/?'+encodeURIComponent(DEEPSEEK_URL);
+      resp = await doFetch(proxyUrl);
+      if(!resp.ok){ lastError = 'Proxy HTTP '+resp.status; }
+    }catch(e2){
+      lastError = 'CORS+Proxy: '+(e2.message||'failed');
+      console.log('Proxy call also failed:', lastError);
     }
-    return data;
-  }catch(e){ return null; }
+  }
+
+  if(!resp || !resp.ok){
+    if(!apiCallFailed){
+      toast('⚠️ 无法连接 DeepSeek API（浏览器跨域限制），已使用本地资源库。建议通过后端代理调用。');
+      apiCallFailed = true;
+    }
+    return null;
+  }
+
+  apiCallFailed = false;
+  const data = await resp.json();
+  if(data.usage){
+    D.tokenUsage.total = (D.tokenUsage.total||0)+(data.usage.total_tokens||0);
+    D.tokenUsage.count = (D.tokenUsage.count||0)+1; save();
+    const tokens = data.usage.total_tokens||0;
+    const cost = (tokens/1000000).toFixed(4);
+    toast(`🤖 DeepSeek V4 Pro · 消耗 ${tokens.toLocaleString()} Token ≈ ¥${cost}`);
+  }
+  return data;
 }
 
 function getTokenStats(){
@@ -1140,7 +1181,7 @@ function renderResourceSearch(){
   else filtered.sort((a,b)=>(b.matchScore||0)-(a.matchScore||0));
 
   const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <button onclick="document.getElementById('resourceSearchModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer">←</button>
+    <button onclick="document.getElementById('resourceSearchModal').style.display='none';document.getElementById('wizardModal').style.display='flex';renderWizard()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer">← 返回向导</button>
     <h2 style="font-size:16px;margin:0">🔍 搜索学习资源</h2>
     <span></span></div>
   <div class="form-group"><input class="input" id="resSearchInput" value="${st.topic}" onchange="resourceSearchState.topic=this.value"><button class="btn btn-sm btn-purple" style="margin-top:8px" onclick="resourceSearchState.isSearching=true;renderResourceSearch();searchResources(resourceSearchState.topic).then(r=>{resourceSearchState.results=r;resourceSearchState.isSearching=false;renderResourceSearch()})">🔍 重新搜索</button></div>
@@ -1179,7 +1220,7 @@ function renderResourceSearch(){
 
   ${st.selected!==null?`<div style="position:sticky;bottom:0;background:var(--card-bg);padding:12px 0;border-top:1px solid var(--border);margin-top:8px">
     <div style="font-size:13px;color:var(--text2);margin-bottom:8px">已选：${st.results[st.selected]?.name||''}</div>
-    <button class="btn btn-gold btn-block" onclick="wizardState.searchResults=resourceSearchState.results;wizardState.selectedResource=resourceSearchState.selected;renderWizard();document.getElementById('resourceSearchModal').style.display='none'">✅ 确认选择，返回向导</button>
+    <button class="btn btn-gold btn-block" onclick="wizardState.searchResults=resourceSearchState.results;wizardState.selectedResource=resourceSearchState.selected;wizardState.isSearching=false;wizardState.step=5;document.getElementById('resourceSearchModal').style.display='none';document.getElementById('wizardModal').style.display='flex';renderWizard()">✅ 确认选择，返回向导</button>
   </div>`:''}`;
 
   document.getElementById('resourceSearchInner').innerHTML = html;
@@ -1774,7 +1815,7 @@ document.querySelectorAll('.bottom-nav button').forEach(btn=>{
     if(btn.dataset.page==='settings') renderSettings();
   });
 });
-document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.style.display='none';});});
+document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o){o.style.display='none';if(o.id==='resourceSearchModal'){document.getElementById('wizardModal').style.display='flex';renderWizard();}}});});
 function toast(msg){
   const el=document.createElement('div'); el.className='toast'; el.textContent=msg;
   document.getElementById('toastContainer').appendChild(el); setTimeout(()=>el.remove(),2500);
