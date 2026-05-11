@@ -554,7 +554,7 @@ async function searchResources(topic, forceRefresh=false){
   console.log('[searchResources] Calling DeepSeek V4 Pro for:', topic);
   toast('🔍 DeepSeek V4 Pro 正在搜索...');
   const msgs = [
-    {role:'system',content:`你是学习资源推荐专家。搜索并推荐4-6个优质学习资源。对每个资源必须提供：
+    {role:'system',content:`你是学习资源推荐专家。搜索并推荐15-20个优质学习资源。对每个资源必须提供：
 1. name - 资源名称
 2. author - 作者/平台
 3. type - 类型（视频课程/书籍/在线教程/练习平台/文档）
@@ -567,7 +567,7 @@ async function searchResources(topic, forceRefresh=false){
 返回严格JSON：{"resources":[...]}`},
     {role:'user',content:`搜索学习主题"${topic}"的优质资源，要求链接真实可访问，并给出每个资源的优缺点对比。`}
   ];
-  const resp = await deepseekCall(msgs, {maxTokens:2500});
+  const resp = await deepseekCall(msgs, {maxTokens:4000});
 
   if(resp){
     try{
@@ -934,34 +934,19 @@ function wizFocus(){
 
 function wizResource(){
   const ws = wizardState;
+  const hasSelection = ws.selectedResource!==null && ws.searchResults.length>0;
   return `<h2>🔍 S7：选择学习资料</h2>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 联网搜索中...':'📚 本地资源库匹配中...'}</p>
+    ${hasSelection?`<div class="card" style="border-color:var(--gold);margin-bottom:12px">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:4px">已选择：</p>
+      <div style="font-weight:600;font-size:14px">${ws.searchResults[ws.selectedResource]?.name||''}</div>
+      <p style="font-size:11px;color:var(--text3);margin-top:2px">${ws.searchResults[ws.selectedResource]?.author||''} · ${ws.searchResults[ws.selectedResource]?.type||''}</p>
+    </div>`:''}
+    <p style="color:var(--text2);font-size:13px;margin-bottom:8px">${D.apiKey?'🤖 DeepSeek V4 实时搜索 · 最多20个结果':'📚 本地资源库 · 最多12个结果'}</p>
     ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn btn-outline btn-block" style="flex:1" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">🔍 展开搜索</button>
-      <button class="btn btn-sm btn-purple" onclick="event.stopPropagation();searchResourcesFresh('${ws.topicName}')" title="跳过缓存，强制重新搜索">🔄 刷新</button>
-    </div>
-    <div id="resourceResults">
-      ${ws.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 正在搜索全网资源...</p><p style="font-size:12px;color:var(--text3)">搜索真实课程链接、对比优劣...</p></div>`:
-      ws.searchResults.length>0?ws.searchResults.slice(0,5).map((r,i)=>`<div class="resource-card ${ws.selectedResource===i?'selected':''}" onclick="wizardState.selectedResource=${i};renderWizard()" style="flex-direction:column;align-items:stretch">
-        <div style="display:flex;gap:10px;align-items:flex-start">
-          <div class="r-icon">${(r.type||'').includes('视频')?'🎬':(r.type||'').includes('书籍')?'📖':(r.type||'').includes('练习')?'🎮':'🌐'}</div>
-          <div class="r-info">
-            <div class="r-name">${r.name}</div>
-            <div class="r-author">${r.author||''} · ${r.type||''}</div>
-            <div style="font-size:12px;color:var(--text2);margin-top:2px">${r.description||r.desc||''}</div>
-            ${r.url?`<a href="${r.url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:4px;font-size:12px;color:var(--purple-light);text-decoration:underline">🔗 打开链接 →</a>`:''}
-          </div>
-          <div class="r-score" style="text-align:center;min-width:40px">${r.matchScore||r.score||'?'}<span style="font-size:10px;display:block">分</span></div>
-        </div>
-        ${(r.pros||r.cons)?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:11px">
-          ${r.pros?`<div style="flex:1"><span style="color:var(--success)">✅ 优点</span><br>${(Array.isArray(r.pros)?r.pros:[r.pros]).map(p=>'• '+p).join('<br>')}</div>`:''}
-          ${r.cons?`<div style="flex:1"><span style="color:var(--danger)">⚠️ 不足</span><br>${(Array.isArray(r.cons)?r.cons:[r.cons]).map(c=>'• '+c).join('<br>')}</div>`:''}
-        </div>`:''}
-      </div>`).join('')+`<p style="text-align:center;font-size:12px;color:var(--text3);margin:8px 0">显示前5个 · <span style="color:var(--purple-light);cursor:pointer" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">查看全部 ${ws.searchResults.length} 个结果 →</span></p>`:
-      '<p style="text-align:center;color:var(--text3);padding:30px">输入学习主题后自动搜索</p>'}
-    </div>
-    <div class="form-group" style="margin-top:12px"><label class="label">或自定义资源</label><div style="display:flex;gap:8px"><input class="input" id="customResInput" placeholder="输入资源名称或网址"><button class="btn btn-sm btn-outline" onclick="addCustomResource()">添加</button></div></div>`;
+    <button class="btn btn-gold btn-block" style="margin-bottom:8px;padding:14px;font-size:16px" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}',true)">🔍 打开搜索页面</button>
+    <p style="text-align:center;font-size:12px;color:var(--text3)">点击上方按钮进入全屏搜索，可筛选排序，选择后返回</p>
+    ${hasSelection?`<button class="btn btn-outline btn-block" style="margin-top:8px" onclick="wizardState.selectedResource=null;renderWizard()">清除选择</button>`:''}
+    <div class="form-group" style="margin-top:12px"><label class="label">或手动输入资源</label><div style="display:flex;gap:8px"><input class="input" id="customResInput" placeholder="输入资源名称或网址"><button class="btn btn-sm btn-outline" onclick="addCustomResource()">添加</button></div></div>`;
 }
 
 function wizConfirm(){
@@ -984,24 +969,30 @@ async function wizardNext(){
 
   if(s===0 && !ws.topicName.trim()){ toast('请输入学习主题'); return; }
 
-  // Step 6 (resource) → search
-  if(s===6){
-    if(ws.searchResults.length===0 && ws.topicName.trim()){
-      ws.isSearching = true; renderWizard();
-      const results = await searchResources(ws.topicName);
-      ws.searchResults = results; ws.isSearching = false; renderWizard();
-      return;
-    }
-    if(ws.searchResults.length===0){ toast('请等待搜索完成或自定义资源'); return; }
+  // Step 6→7 skip auto search, user clicks button to open search page
+  if(s===6 && ws.searchResults.length===0 && ws.topicName.trim()){
+    // Auto-open the search page
+    ws.step = 6; renderWizard();
+    document.getElementById('wizardModal').style.display = 'none';
+    openResourceSearchPage(ws.topicName, true);
+    return;
   }
 
-  if(s===7){ createPlan(); return; }
+  if(s===7){
+    if(!ws.selectedResource && ws.searchResults.length===0){
+      toast('请先在搜索页面中选择一个资源'); return;
+    }
+    createPlan(); return;
+  }
 
-  // Step 5→6: trigger search when moving to resource step
-  if(s===5 && ws.topicName.trim() && ws.searchResults.length===0){
-    ws.step = 6; ws.isSearching = true; renderWizard();
-    const results = await searchResources(ws.topicName);
-    ws.searchResults = results; ws.isSearching = false; renderWizard();
+  // Step 5→6: skip resource step auto, user opens search from step 6 UI
+  if(s===5 && ws.topicName.trim()){
+    ws.step = 6; renderWizard();
+    // Auto-open search page
+    setTimeout(() => {
+      document.getElementById('wizardModal').style.display = 'none';
+      openResourceSearchPage(ws.topicName, true);
+    }, 300);
     return;
   }
 
@@ -1255,12 +1246,13 @@ function completeTask(task){
 // ═══════════════ RESOURCE SEARCH PAGE ═══════════════
 let resourceSearchState = {topic:'',results:[],isSearching:false,selected:null,sortBy:'matchScore',filterType:'all'};
 
-async function openResourceSearchPage(topic){
+async function openResourceSearchPage(topic, freshSearch=false){
   resourceSearchState = {topic,results:[],isSearching:true,selected:null,sortBy:'matchScore',filterType:'all'};
   document.getElementById('resourceSearchModal').style.display = 'flex';
   renderResourceSearch();
-  // Search
-  const results = await searchResources(topic);
+  // Force fresh search
+  if(freshSearch){ D.resourceCache['search_'+topic] = null; save(); }
+  const results = await searchResources(topic, freshSearch);
   resourceSearchState.results = results; resourceSearchState.isSearching = false;
   renderResourceSearch();
 }
