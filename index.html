@@ -290,7 +290,7 @@ body{
 // ═══════════════ DATA LAYER ═══════════════
 const STORAGE_KEY = 'studybuddy_v3';
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
-const MODEL = 'deepseek-v4-flash';
+const MODEL = 'deepseek-v4-pro';
 let D = { user:{ charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false,feynmanCount:0,exerciseCount:0,streakDays:0 }, plans:[], tasks:[], reviewItems:[], exerciseRecords:[], achievements:[], apiKey:'', settings:{ reviewMode:'standard',lang:'zh' }, resourceCache:{}, syllabusEdits:{}, tokenUsage:{total:0,count:0} };
 const ACHIEVEMENTS = [
   { key:'streak7',icon:'🗓',title:'坚持一周',desc:'连续7天活跃',reward:'解锁专属主题',cond:p=>p.user.streakDays>=7 },
@@ -755,27 +755,197 @@ function addCustomResource(){
 function createPlan(){
   const ws = wizardState;
   if(!ws.topicName.trim()){ toast('请输入学习主题'); return; }
-  const syllabus = generateSyllabus(ws.topicName, ws.totalDays, ws.dailyMin, ws.level);
   const res = ws.searchResults[ws.selectedResource];
+  document.getElementById('wizardModal').style.display = 'none';
+
+  if(D.apiKey && res){
+    // Show loading and generate personalized plan
+    planLoadingId = uid();
+    const loadingHtml = `<div class="card" id="planLoading_${planLoadingId}" style="text-align:center;padding:30px">
+      <div style="font-size:48px;animation:popIn 1s infinite">🧠</div>
+      <h3 style="color:var(--gold);margin:12px 0">DeepSeek V4 Pro 分析中...</h3>
+      <p style="color:var(--text2);font-size:13px" id="planLoadingText">正在分析「${res.name}」的课程结构</p>
+      <p style="color:var(--text3);font-size:11px;margin-top:4px">根据你的每日${ws.dailyMin}分钟个性化定制</p>
+    </div>`;
+    const planList = document.getElementById('planList');
+    planList.insertAdjacentHTML('afterbegin', loadingHtml);
+    generatePersonalizedPlan(ws, res);
+  } else {
+    // Use generic generator
+    createPlanGeneric(ws, res);
+  }
+}
+
+let planLoadingId = null;
+
+async function generatePersonalizedPlan(ws, res){
+  const loadingText = document.getElementById('planLoadingText');
+  const steps = [
+    '正在搜索「'+res.name+'」的完整课程目录...',
+    '分析章节结构，匹配学习路径...',
+    '根据每日'+ws.dailyMin+'分钟拆分学习量...',
+    '正在生成个性化大纲...'
+  ];
+  let stepIdx = 0;
+  const stepInterval = setInterval(()=>{ if(loadingText&&stepIdx<steps.length){ loadingText.textContent=steps[stepIdx]; stepIdx++; } }, 1500);
+
+  const msgs = [
+    {role:'system',content:`你是课程规划专家。根据用户选择的学习资源，分析其真实章节结构，生成个性化每日学习计划。
+
+用户参数：
+- 学习主题：${ws.topicName}
+- 总天数：${ws.totalDays} 天
+- 每日时长：${ws.dailyMin} 分钟
+- 当前水平：${ws.level==='beginner'?'零基础':ws.level==='intermediate'?'有一定基础':'进阶'}
+- 目标侧重：${ws.focusTags.length>0?ws.focusTags.join('、'):'综合学习'}
+- 选中资源：${res.name}（${res.author||''}，${res.type||''}）
+
+要求：
+1. 先用web_search搜索该资源的真实章节/集数/目录结构
+2. 根据用户的总天数和每日时长，将资源内容合理拆分到每一天
+3. 每天的内容量要与每日时长匹配（15分钟≈1小节，60分钟≈1-2章节，120分钟≈2-3章节）
+4. 考虑用户的水平和目标侧重来调整进度
+
+返回严格JSON格式（不要markdown包裹）：
+{"resourceStructure":"资源结构简要描述","syllabus":[{"day":1,"title":"具体学习内容标题","resourceRef":"第X章/第X集/PXX-XX","concepts":["核心概念1","核心概念2"],"estMinutes":45,"phase":"基础入门"}]}`},
+    {role:'user',content:`请分析"${res.name}"（${res.author||''}）的课程结构，为"${ws.topicName}"制定${ws.totalDays}天、每天${ws.dailyMin}分钟的个性化学习计划。用户水平：${ws.level}。`}
+  ];
+
+  let syllabus = null;
+  let analysisText = '';
+
+  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:4000});
+  clearInterval(stepInterval);
+
+  if(resp){
+    try{
+      const content = resp.choices[0].message.content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const json = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+      if(json.syllabus && json.syllabus.length>0){
+        syllabus = json.syllabus;
+        analysisText = json.resourceStructure || '';
+      }
+    }catch(e){ console.log('Parse error:',e); }
+  }
+
+  // Remove loading
+  const loadingEl = document.getElementById('planLoading_'+planLoadingId);
+  if(loadingEl) loadingEl.remove();
+
+  if(!syllabus){
+    toast('⚠️ AI分析超时，使用通用大纲');
+    createPlanGeneric(ws, res);
+    return;
+  }
+
+  // Create plan with personalized syllabus
+  savePersonalizedPlan(ws, res, syllabus, analysisText);
+}
+
+function savePersonalizedPlan(ws, res, syllabus, analysisText){
   const plan = {
     id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
-    level: ws.level, focusTags: ws.focusTags.join(','), selectedResource: res?JSON.stringify(res):'', syllabus: JSON.stringify(syllabus),
+    level: ws.level, focusTags: ws.focusTags.join(','),
+    selectedResource: res?JSON.stringify(res):'',
+    resourceAnalysis: analysisText,
+    syllabus: JSON.stringify(syllabus),
+    isPersonalized: true,
+    status:'active', createdAt: today(), syllabusEdits: {}
+  };
+  D.plans.push(plan);
+
+  // Create tasks from personalized syllabus
+  const reviewQueue = [];
+  syllabus.forEach((day, i) => {
+    const date = addDays(today(), i);
+    const dayNum = i + 1;
+    const tasks = [];
+
+    // Main learning task with resource reference
+    tasks.push({
+      id: uid(), planId: plan.id, planName: ws.topicName,
+      date, dayNum,
+      type: 'new_content',
+      title: `${ws.topicName} · ${day.title||'第'+dayNum+'天'}`,
+      desc: `学习${day.resourceRef||'指定内容'}（约${day.estMinutes||ws.dailyMin}分钟）`,
+      estMin: day.estMinutes || Math.round(ws.dailyMin*0.6),
+      concepts: day.concepts || [],
+      resRef: day.resourceRef || ''
+    });
+
+    // Schedule reviews
+    [1,3,7,14].forEach(iv => {
+      reviewQueue.push({day:dayNum, topic:day.title, reviewDay:dayNum+iv});
+    });
+
+    // Active recall
+    tasks.push({
+      id: uid(), planId: plan.id, planName: ws.topicName,
+      date, dayNum, type:'active_recall',
+      title:'🧠 闭卷回忆',
+      desc:'不看资料，闭卷回忆前一天要点（15分钟）',
+      estMin:15, concepts:[], resRef:''
+    });
+
+    // Feynman every 3 days
+    if(dayNum%3===0){
+      tasks.push({
+        id: uid(), planId: plan.id, planName: ws.topicName,
+        date, dayNum, type:'feynman',
+        title:'🗣 费曼输出',
+        desc:'用自己的话讲解已学概念（20分钟）',
+        estMin:20, concepts:day.concepts||[], resRef:''
+      });
+    }
+
+    // Review tasks
+    reviewQueue.filter(r=>r.reviewDay===dayNum).forEach(r=>{
+      tasks.push({
+        id: uid(), planId: plan.id, planName: ws.topicName,
+        date, dayNum, type:'spaced_review',
+        title:`🔄 间隔复习·${r.topic}`,
+        desc:'艾宾浩斯遗忘曲线节点复习（25分钟）',
+        estMin:25, concepts:[], resRef:''
+      });
+    });
+
+    tasks.forEach(t => D.tasks.push(t));
+  });
+
+  D.syllabusEdits[plan.id] = {};
+  save();
+  renderAll();
+  toast(`✅ 「${ws.topicName}」已生成！\n🧠 DeepSeek V4 Pro 个性化定制 · ${syllabus.length}天大纲\n${analysisText?'📋 '+analysisText:''}`);
+}
+
+function createPlanGeneric(ws, res){
+  const syllabus = generateSyllabus(ws.topicName, ws.totalDays, ws.dailyMin, ws.level);
+  const plan = {
+    id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
+    level: ws.level, focusTags: ws.focusTags.join(','),
+    selectedResource: res?JSON.stringify(res):'',
+    resourceAnalysis: '',
+    syllabus: JSON.stringify(syllabus),
+    isPersonalized: false,
     status:'active', createdAt: today(), syllabusEdits: {}
   };
   D.plans.push(plan);
   syllabus.forEach(day => {
     day.tasks.forEach(task => {
-      D.tasks.push({ id:task.id, planId:plan.id, planName:ws.topicName, date:day.date, dayNum:day.day,
-        title:task.title, desc:task.desc, type:task.type, estMin:task.estMin, concepts:task.concepts||[], resRef:task.resRef||'', completed:false, rating:0, xpEarned:0 });
+      D.tasks.push({
+        id:task.id, planId:plan.id, planName:ws.topicName,
+        date:day.date, dayNum:day.day,
+        title:task.title, desc:task.desc, type:task.type,
+        estMin:task.estMin, concepts:task.concepts||[], resRef:task.resRef||'',
+        completed:false, rating:0, xpEarned:0
+      });
     });
   });
   D.syllabusEdits[plan.id] = {};
   save();
-  document.getElementById('wizardModal').style.display = 'none';
   renderAll();
-  toast(`✅ 「${ws.topicName}」已创建！\n大纲生成中，下拉刷新查看`);
-  // Simulate async syllabus generation
-  setTimeout(()=>{ toast('📋 大纲已生成，可点击计划查看'); }, 2000);
+  toast(`✅ 「${ws.topicName}」已创建！`);
 }
 
 // ═══════════════ TASK OPERATIONS ═══════════════
@@ -1259,8 +1429,8 @@ function renderPlans(){
     const todayTasks=tasks.filter(t=>t.date===today()&&!t.completed);
     const dueReviews=getDueReviews(plan.id,D.settings.reviewMode).length;
     return `<div class="plan-card" onclick="openPlanDetail('${plan.id}')">
-      <div class="p-name">${plan.topicName}</div>
-      <div class="p-meta"><span>${plan.totalDays}天</span><span>·</span><span>${plan.dailyMin}分钟/天</span></div>
+      <div class="p-name">${plan.topicName} ${plan.isPersonalized?'<span class="tag tag-gold" style="font-size:10px">🧠 AI定制</span>':''}</div>
+      <div class="p-meta"><span>${plan.totalDays}天</span><span>·</span><span>${plan.dailyMin}分钟/天</span>${plan.isPersonalized?'<span>·</span><span style="color:var(--purple-light)">Pro</span>':''}</div>
       <div class="progress-bar"><div class="progress-fill progress-purple" style="width:${pct}%"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
         <span style="color:var(--text2)">进度 ${pct}%</span>
@@ -1362,10 +1532,10 @@ function renderSettings(){
     <div class="card" style="background:var(--purple-bg);border-color:var(--purple);margin-top:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:13px">🤖 DeepSeek V4</span>
-        <span class="tag tag-gold">Flash</span>
+        <span class="tag tag-gold">Pro</span>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">${getTokenStats()}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px">模型: deepseek-v4-flash · 极速响应</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">模型: deepseek-v4-pro · 深度推理</div>
     </div>`;
   } else {
     apiSt.innerHTML=`<p style="color:var(--text3);font-size:14px">未配置 · 使用本地模式</p><p style="font-size:12px;color:var(--text3)">配置后可体验 DeepSeek V4 联网搜索、AI 出题、费曼评价</p>`;
