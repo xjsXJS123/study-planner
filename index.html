@@ -553,23 +553,29 @@ async function searchResources(topic, forceRefresh=false){
   console.log('[searchResources] Calling DeepSeek V4 Pro for:', topic);
   toast('🔍 DeepSeek V4 Pro 正在搜索...');
   const msgs = [
-    {role:'system',content:`你是学习资源推荐专家。搜索并推荐8-10个高质量学习资源。
+    {role:'system',content:`你是学习资源推荐专家。搜索并推荐8-10个高质量、内容较新的学习资源。
 
-重要链接规则：
+时效性要求：
+- 优先推荐近3年内发布或更新的资源
+- 经典教材需注明版本年份，优先最新版
+- 在线课程优先仍在更新的
+- 不要推荐已下架或停更超过2年的资源
+
+链接规则：
 - url 必须是真实存在的链接，不确定的链接不要填
 - 优先选择：B站(bilibili)、中国大学MOOC(icourse163)、知乎、豆瓣、GitHub、官方文档等国内可访问的网站
-- 不要编造链接，没有可靠链接就留空字符串""
 - 视频资源优先提供B站链接，书籍优先提供豆瓣链接
 
 对每个资源提供：
 1. name - 资源名称
-2. author - 作者/平台（必须真实）
+2. author - 作者/平台
 3. type - 类型（视频课程/书籍/在线教程/练习平台）
-4. url - 真实链接（不确定就留空）
+4. url - 真实链接
 5. description - 简短描述
-6. pros - 优点（2-3条）
-7. cons - 缺点（1-2条）
-8. matchScore - 匹配度1-100
+6. year - 发布/更新年份（如2024）
+7. pros - 优点（2-3条）
+8. cons - 缺点（1-2条）
+9. matchScore - 匹配度1-100
 
 返回严格JSON：{"resources":[...]}`},
     {role:'user',content:`搜索学习主题"${topic}"的优质资源，要求链接真实可访问，并给出每个资源的优缺点对比。`}
@@ -615,11 +621,11 @@ async function searchResources(topic, forceRefresh=false){
 function getLocalResources(topic){
   const lib = {
     '高等数学':[
-      {name:'高等数学（同济第七版）',author:'同济大学数学系',type:'书籍',url:'https://book.douban.com/subject/26944646/',description:'国内最经典的高数教材，考研指定用书',pros:['体系完整严谨','例题丰富','考研指定教材'],cons:['偏理论，不够直观','自学难度较大'],matchScore:95},
-      {name:'宋浩老师《高等数学》',author:'B站 宋浩',type:'视频课程',url:'https://search.bilibili.com/all?keyword=宋浩+高等数学',description:'B站播放量最高的高数课，讲解风趣',pros:['零基础友好','讲解清晰风趣','完全免费'],cons:['课时较多(100+)','深度不如教材'],matchScore:92},
-      {name:'MIT 18.01 微积分',author:'MIT OCW',type:'在线教程',url:'https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/',description:'麻省理工经典微积分公开课',pros:['世界顶级名校课程','配套习题完善'],cons:['全英文授课','需科学上网'],matchScore:85},
-      {name:'普林斯顿微积分读本',author:'Adrian Banner',type:'书籍',url:'',description:'直观易懂的微积分入门书，适合自学',pros:['通俗易懂','大量图例','适合自学'],cons:['深度不如同济','偏直觉少严格证明'],matchScore:88},
-      {name:'3Blue1Brown 微积分本质',author:'3Blue1Brown',type:'视频课程',url:'https://www.bilibili.com/video/BV1qW411N7FU/',description:'用动画直观展示微积分核心概念',pros:['动画直观','培养数学直觉','免费'],cons:['不涉及计算技巧','需配合教材使用'],matchScore:90},
+      {name:'高等数学（同济第七版）',author:'同济大学数学系',type:'书籍',year:'2023',url:'https://book.douban.com/subject/26944646/',description:'国内最经典的高数教材，考研指定用书',pros:['体系完整严谨','例题丰富','考研指定教材'],cons:['偏理论，不够直观','自学难度较大'],matchScore:95},
+      {name:'宋浩老师《高等数学》',author:'B站 宋浩',type:'视频课程',year:'2024',url:'https://search.bilibili.com/all?keyword=宋浩+高等数学',description:'B站播放量最高的高数课，讲解风趣',pros:['零基础友好','讲解清晰风趣','完全免费'],cons:['课时较多(100+)','深度不如教材'],matchScore:92},
+      {name:'MIT 18.01 微积分',author:'MIT OCW',type:'在线教程',year:'2023',url:'https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/',description:'麻省理工经典微积分公开课',pros:['世界顶级名校课程','配套习题完善'],cons:['全英文授课','需科学上网'],matchScore:85},
+      {name:'普林斯顿微积分读本',author:'Adrian Banner',type:'书籍',year:'2022',url:'',description:'直观易懂的微积分入门书，适合自学',pros:['通俗易懂','大量图例','适合自学'],cons:['深度不如同济','偏直觉少严格证明'],matchScore:88},
+      {name:'3Blue1Brown 微积分本质',author:'3Blue1Brown',type:'视频课程',year:'2024',url:'https://www.bilibili.com/video/BV1qW411N7FU/',description:'用动画直观展示微积分核心概念',pros:['动画直观','培养数学直觉','免费'],cons:['不涉及计算技巧','需配合教材使用'],matchScore:90},
       {name:'张宇考研数学',author:'张宇',type:'视频课程',url:'',description:'考研数学名师，讲解深入浅出',pros:['考研导向','真题丰富','讲解生动'],cons:['偏应试','基础部分略快'],matchScore:87},
       {name:'Khan Academy Calculus',author:'Khan Academy',type:'在线教程',url:'https://www.khanacademy.org/math/calculus-1',description:'可汗学院微积分，全球最大免费学习平台',pros:['完全免费','交互式练习','进度追踪'],cons:['英文为主','中文字幕不全'],matchScore:84},
       {name:'高等数学习题全解',author:'同济大学',type:'练习平台',url:'',description:'配套同济教材的习题详解',pros:['配套教材','每道题有详解'],cons:['部分解答简略','需配合教材'],matchScore:82},
@@ -1259,13 +1265,13 @@ function completeTask(task){
 }
 
 // ═══════════════ RESOURCE SEARCH PAGE ═══════════════
-let resourceSearchState = {topic:'',results:[],isSearching:false,selected:null,sortBy:'matchScore',filterType:'all'};
+let resourceSearchState = {topic:'',results:[],isSearching:false,selected:null,sortBy:'matchScore',filterType:'all',yearFilter:'all'};
 
 async function openResourceSearchPage(topic, freshSearch=false){
   // Save context so we can restore if page reloads
   D._searchContext = {topic, freshSearch, wizardStep:wizardState.step};
   save();
-  resourceSearchState = {topic,results:[],isSearching:true,selected:null,sortBy:'matchScore',filterType:'all'};
+  resourceSearchState = {topic,results:[],isSearching:true,selected:null,sortBy:'matchScore',filterType:'all',yearFilter:'all'};
   document.getElementById('resourceSearchModal').style.display = 'flex';
   renderResourceSearch();
   if(freshSearch){ D.resourceCache['search_'+topic] = null; save(); }
@@ -1277,11 +1283,15 @@ async function openResourceSearchPage(topic, freshSearch=false){
 function renderResourceSearch(){
   const st = resourceSearchState;
   const types = ['all','视频课程','书籍','在线教程','练习平台'];
-  const sortOpts = [{k:'matchScore',l:'匹配度'},{k:'name',l:'名称'}];
+  const sortOpts = [{k:'matchScore',l:'匹配度'},{k:'year',l:'最新优先'},{k:'name',l:'名称'}];
 
   let filtered = [...st.results];
   if(st.filterType!=='all') filtered = filtered.filter(r=>(r.type||'').includes(st.filterType));
+  // Year filter
+  if(st.yearFilter==='recent') filtered = filtered.filter(r=>parseInt(r.year)>=2023);
+  if(st.yearFilter==='classic') filtered = filtered.filter(r=>parseInt(r.year)<2023||!r.year);
   if(st.sortBy==='name') filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  else if(st.sortBy==='year') filtered.sort((a,b)=>(b.year||0)-(a.year||0));
   else filtered.sort((a,b)=>(b.matchScore||0)-(a.matchScore||0));
 
   const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -1291,8 +1301,10 @@ function renderResourceSearch(){
   <div class="form-group"><input class="input" id="resSearchInput" value="${st.topic}" onchange="resourceSearchState.topic=this.value"><button class="btn btn-sm btn-purple" style="margin-top:8px" onclick="resourceSearchState.isSearching=true;renderResourceSearch();searchResources(resourceSearchState.topic).then(r=>{resourceSearchState.results=r;resourceSearchState.isSearching=false;renderResourceSearch()})">🔍 重新搜索</button></div>
 
   <!-- Filters -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+    ${types.map(t=>`<span class="tag ${st.filterType===t?'tag-gold':'tag-purple'}" style="cursor:pointer;font-size:12px" onclick="resourceSearchState.filterType='${t}';renderResourceSearch()">${t==='all'?'全部类型':t}</span>`).join('')}</div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-    ${types.map(t=>`<span class="tag ${st.filterType===t?'tag-gold':'tag-purple'}" style="cursor:pointer;font-size:12px" onclick="resourceSearchState.filterType='${t}';renderResourceSearch()">${t==='all'?'全部':t}</span>`).join('')}
+    ${[{k:'all',l:'全部时间'},{k:'recent',l:'🆕 2023年后'},{k:'classic',l:'📚 经典教材'}].map(y=>`<span class="tag ${st.yearFilter===y.k?'tag-gold':'tag-purple'}" style="cursor:pointer;font-size:12px" onclick="resourceSearchState.yearFilter='${y.k}';renderResourceSearch()">${y.l}</span>`).join('')}
   </div>
   <div style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:var(--text2)">
     <span>排序：</span>${sortOpts.map(s=>`<span style="cursor:pointer;color:${st.sortBy===s.k?'var(--gold)':'var(--text2)'}" onclick="resourceSearchState.sortBy='${s.k}';renderResourceSearch()">${s.l}</span>`).join(' · ')}
@@ -1309,7 +1321,7 @@ function renderResourceSearch(){
       <div style="font-size:28px">${(r.type||'').includes('视频')?'🎬':(r.type||'').includes('书籍')?'📖':'🌐'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600">${r.name} <span style="color:var(--gold);font-size:12px">${r.matchScore||'?'}分</span></div>
-        <div style="font-size:12px;color:var(--text2)">${r.author||''} · ${r.type||''}</div>
+        <div style="font-size:12px;color:var(--text2)">${r.author||''} · ${r.type||''}${r.year?' · '+r.year+'年':''}</div>
         <div style="font-size:12px;color:var(--text2);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${r.description||''}</div>
         ${r.url?`<a href="${r.url}" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:var(--purple-light)">🔗 访问资源 →</a>`:''}
       </div>
