@@ -262,7 +262,7 @@ body{
     <button class="btn btn-sm btn-outline btn-block" style="margin-top:8px" onclick="runDiagnostics()">🔍 运行诊断</button>
     <button class="btn btn-sm btn-outline btn-block" style="margin-top:4px" onclick="D.resourceCache={};D.tokenUsage={total:0,count:0};save();renderAll();toast('✅ 缓存已清空')">🗑 清空搜索缓存</button>
   </div>
-  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v3.5 · DeepSeek V4 Pro · <span style="color:var(--success)">直连模式</span></p>
+  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v3.6 · DeepSeek V4 Flash · <span style="color:var(--success)">直连模式</span></p>
 </div>
 
 <!-- Bottom Nav -->
@@ -570,8 +570,10 @@ async function searchResources(topic, forceRefresh=false){
 
   if(resp){
     try{
-      const content = resp.choices?.[0]?.message?.content || '';
+      let content = resp.choices?.[0]?.message?.content || '';
       console.log('[searchResources] Raw response length:', content.length);
+      // Strip markdown code blocks if present
+      content = content.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if(jsonMatch){
         const json = JSON.parse(jsonMatch[0]);
@@ -579,11 +581,11 @@ async function searchResources(topic, forceRefresh=false){
         if(json.resources && json.resources.length>0){
           D.resourceCache[cacheKey] = {data:json.resources, time:Date.now(), apiResult:true};
           save();
-          toast(`✅ V4 Pro 搜索完成！找到 ${json.resources.length} 个资源`);
+          toast(`✅ AI 搜索完成！找到 ${json.resources.length} 个资源`);
           return json.resources;
         }
       }
-      console.log('[searchResources] Failed to parse resources from response');
+      console.log('[searchResources] Failed to parse resources');
     }catch(e){ console.log('[searchResources] Parse error:', e); }
   } else {
     console.log('[searchResources] API call returned null');
