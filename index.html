@@ -256,7 +256,13 @@ body{
   <div class="card"><h3 style="font-size:15px;margin-bottom:12px">📊 复习强度</h3><div id="reviewModeSetting"></div></div>
   <div class="card"><h3 style="font-size:15px;margin-bottom:12px">💾 数据管理</h3><button class="btn btn-outline btn-block" onclick="exportData()" style="margin-bottom:8px">📤 导出学习数据</button><button class="btn btn-outline btn-block" onclick="importDataPrompt()">📥 恢复数据</button><input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)"></div>
   <div class="card" style="border-color:var(--danger)"><h3 style="font-size:15px;color:var(--danger);margin-bottom:8px">⚠️ 危险操作</h3><button class="btn btn-block" style="background:var(--danger);color:#fff" onclick="resetAll()">🗑 清除所有数据</button></div>
-  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v3.0 · PWA · DeepSeek V4</p>
+  <div class="card" style="margin-top:16px">
+    <h3 style="font-size:14px;margin-bottom:8px">🔧 诊断</h3>
+    <div id="diagnostics" style="font-size:11px;color:var(--text3);line-height:1.6"></div>
+    <button class="btn btn-sm btn-outline btn-block" style="margin-top:8px" onclick="runDiagnostics()">🔍 运行诊断</button>
+    <button class="btn btn-sm btn-outline btn-block" style="margin-top:4px" onclick="D.resourceCache={};D.tokenUsage={total:0,count:0};save();renderAll();toast('✅ 缓存已清空')">🗑 清空搜索缓存</button>
+  </div>
+  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v3.5 · DeepSeek V4 Pro · <span style="color:var(--success)">直连模式</span></p>
 </div>
 
 <!-- Bottom Nav -->
@@ -510,20 +516,41 @@ async function testApiConnection(){
   }
 }
 
+async function searchResourcesFresh(topic){
+  // Clear cache and force re-search
+  D.resourceCache['search_'+topic] = null;
+  save();
+  wizardState.searchResults = []; wizardState.selectedResource = null;
+  wizardState.isSearching = true; renderWizard();
+  const results = await searchResources(topic, true);
+  wizardState.searchResults = results; wizardState.isSearching = false; renderWizard();
+}
+
 function getTokenStats(){
   const t = D.tokenUsage || {total:0,count:0};
   const cost = (t.total / 1000000 * 1).toFixed(4); // ~¥1 per 1M tokens
   return `已调用 ${t.count||0} 次 · ${(t.total||0).toLocaleString()} Token · 约 ¥${cost}`;
 }
 
-async function searchResources(topic){
+async function searchResources(topic, forceRefresh=false){
   const cacheKey = 'search_'+topic;
-  const cached = D.resourceCache[cacheKey];
-  if(cached && (Date.now()-cached.time < 86400000)) return cached.data;
 
-  if(!D.apiKey) return getLocalResources(topic);
+  // Skip cache if forced
+  if(!forceRefresh){
+    const cached = D.resourceCache[cacheKey];
+    if(cached && (Date.now()-cached.time < 86400000) && cached.apiResult){
+      console.log('[searchResources] Using cached API results for:', topic);
+      return cached.data;
+    }
+  }
 
-  toast('🔍 DeepSeek V4 正在联网搜索...');
+  if(!D.apiKey){
+    console.log('[searchResources] No API key, using local');
+    return getLocalResources(topic);
+  }
+
+  console.log('[searchResources] Calling DeepSeek V4 Pro for:', topic);
+  toast('🔍 DeepSeek V4 Pro 正在搜索...');
   const msgs = [
     {role:'system',content:`你是学习资源推荐专家。搜索并推荐4-6个优质学习资源。对每个资源必须提供：
 1. name - 资源名称
@@ -539,19 +566,30 @@ async function searchResources(topic){
     {role:'user',content:`搜索学习主题"${topic}"的优质资源，要求链接真实可访问，并给出每个资源的优缺点对比。`}
   ];
   const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:2500});
+
   if(resp){
     try{
-      const content = resp.choices[0].message.content;
-      const json = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
-      if(json.resources && json.resources.length>0){
-        D.resourceCache[cacheKey] = {data:json.resources,time:Date.now()};
-        save();
-        toast(`✅ 搜索完成！找到 ${json.resources.length} 个资源 (${getTokenStats()})`);
-        return json.resources;
+      const content = resp.choices?.[0]?.message?.content || '';
+      console.log('[searchResources] Raw response length:', content.length);
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if(jsonMatch){
+        const json = JSON.parse(jsonMatch[0]);
+        console.log('[searchResources] Parsed resources:', json.resources?.length||0);
+        if(json.resources && json.resources.length>0){
+          D.resourceCache[cacheKey] = {data:json.resources, time:Date.now(), apiResult:true};
+          save();
+          toast(`✅ V4 Pro 搜索完成！找到 ${json.resources.length} 个资源`);
+          return json.resources;
+        }
       }
-    }catch(e){ console.log('Parse error:',e); }
+      console.log('[searchResources] Failed to parse resources from response');
+    }catch(e){ console.log('[searchResources] Parse error:', e); }
+  } else {
+    console.log('[searchResources] API call returned null');
   }
-  toast('⚠️ 使用本地资源库');
+
+  // Only cache API results, NOT local fallbacks
+  toast('⚠️ 搜索未返回结果，使用本地资源库');
   return getLocalResources(topic);
 }
 
@@ -877,7 +915,10 @@ function renderWizS5(){
   return `<h2>🔍 S6：选择学习资料</h2>
     <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 Pro 联网搜索中...':'📚 本地资源库匹配中...'}</p>
     ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
-    <button class="btn btn-outline btn-block" style="margin-bottom:12px" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">🔍 展开全屏搜索（更多结果+筛选）</button>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-outline btn-block" style="flex:1" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">🔍 展开搜索</button>
+      <button class="btn btn-sm btn-purple" onclick="event.stopPropagation();searchResourcesFresh('${ws.topicName}')" title="跳过缓存，强制重新搜索">🔄 刷新</button>
+    </div>
     <div id="resourceResults">
       ${ws.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 正在搜索全网资源...</p><p style="font-size:12px;color:var(--text3)">搜索真实课程链接、对比优劣...</p></div>`:
       ws.searchResults.length>0?ws.searchResults.slice(0,5).map((r,i)=>`<div class="resource-card ${ws.selectedResource===i?'selected':''}" onclick="wizardState.selectedResource=${i};renderWizard()" style="flex-direction:column;align-items:stretch">
@@ -1780,6 +1821,30 @@ function renderAdventure(){
   ].map(s=>`<div class="skill-row"><div class="skill-icon">${s.icon}</div><div class="skill-info"><div class="skill-name">${s.name}</div><div class="skill-effect">${s.effect}</div></div><div class="skill-level">Lv.${s.lv}</div>${u.skillPoints>0?`<button class="btn btn-sm btn-gold" onclick="upgradeSkill('${s.key}')">⬆</button>`:''}</div>`).join('');
   document.getElementById('achievementWall').innerHTML=ACHIEVEMENTS.map(a=>{const unlocked=D.achievements.includes(a.key);return`<div class="achieve-card ${unlocked?'unlocked':'locked'}"><div class="icon">${unlocked?a.icon:'🔒'}</div><div class="name">${unlocked?a.title:'???'}</div><div class="cond">${unlocked?a.reward:'需达成条件'}</div></div>`;}).join('');
   document.getElementById('adventureLog').textContent=['📊 本周学习节奏稳定，继续保持每日学习的习惯！','🧠 温故而知新，别忘了间隔复习哦～','📈 今天的学习任务中藏着不少重点概念，专注攻克！','📋 每次费曼输出都是一次知识内化的机会！'][new Date().getDate()%4];
+}
+
+function runDiagnostics(){
+  const el = document.getElementById('diagnostics');
+  const lines = [];
+  lines.push('版本: v3.5 (直连模式)');
+  lines.push('存储键: ' + STORAGE_KEY);
+  lines.push('API Key: ' + (D.apiKey ? D.apiKey.slice(0,6)+'...'+D.apiKey.slice(-4)+(D.apiKey.startsWith('sk-')?' ✅':' ❌') : '❌ 未配置'));
+  lines.push('Token统计: ' + (D.tokenUsage?.count||0) + '次调用, ' + (D.tokenUsage?.total||0).toLocaleString() + ' Token');
+  lines.push('缓存条目: ' + Object.keys(D.resourceCache||{}).length + ' 个');
+  lines.push('计划数: ' + D.plans.length + ' (生成中: ' + D.plans.filter(p=>p.status==='generating').length + ')');
+  lines.push('复习项: ' + D.reviewItems.length + ' (已掌握: ' + D.reviewItems.filter(r=>r.isMastered).length + ')');
+  lines.push('成就: ' + D.achievements.length + '/' + ACHIEVEMENTS.length);
+  lines.push('数据版本: ' + (D.user.lastActiveDate||'无'));
+  el.innerHTML = lines.map(l=>'• '+l).join('<br>');
+
+  // Also test API connectivity in background
+  if(D.apiKey && D.apiKey.startsWith('sk-')){
+    el.innerHTML += '<br><span style="color:var(--purple-light)">🔍 正在后台测试 API 连接...</span>';
+    deepseekCall([{role:'user',content:'回复OK'}],{maxTokens:5}).then(r=>{
+      if(r) el.innerHTML = el.innerHTML.replace('🔍 正在后台测试 API 连接...', '✅ API 连接正常！Model: '+MODEL);
+      else el.innerHTML = el.innerHTML.replace('🔍 正在后台测试 API 连接...', '❌ API 连接失败 - 请检查Key格式和网络');
+    });
+  }
 }
 
 function renderSettings(){
