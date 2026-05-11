@@ -263,7 +263,7 @@ body{
     <button class="btn btn-sm btn-outline btn-block" style="margin-top:8px" onclick="runDiagnostics()">🔍 运行诊断</button>
     <button class="btn btn-sm btn-outline btn-block" style="margin-top:4px" onclick="D.resourceCache={};D.tokenUsage={total:0,count:0};save();renderAll();toast('✅ 缓存已清空')">🗑 清空搜索缓存</button>
   </div>
-  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v3.6 · DeepSeek V4 Flash · <span style="color:var(--success)">直连模式</span></p>
+  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v3.9 · 全屏搜索15+结果 · <span style="color:var(--success)">直连模式</span></p>
 </div>
 
 <!-- Bottom Nav -->
@@ -1890,7 +1890,7 @@ function renderAdventure(){
 function runDiagnostics(){
   const el = document.getElementById('diagnostics');
   const lines = [];
-  lines.push('版本: v3.5 (直连模式)');
+  lines.push('版本: v3.9 (全屏搜索+提醒)');
   lines.push('存储键: ' + STORAGE_KEY);
   lines.push('API Key: ' + (D.apiKey ? D.apiKey.slice(0,6)+'...'+D.apiKey.slice(-4)+(D.apiKey.startsWith('sk-')?' ✅':' ❌') : '❌ 未配置'));
   lines.push('Token统计: ' + (D.tokenUsage?.count||0) + '次调用, ' + (D.tokenUsage?.total||0).toLocaleString() + ' Token');

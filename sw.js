@@ -1,5 +1,5 @@
 // StudyBuddy v3.3 — Force fresh cache
-const CACHE_NAME = 'studybuddy-v3.5-'+Date.now();
+const CACHE_NAME = 'studybuddy-v3.9-final-'+Date.now();
 // Install - wipe ALL old caches immediately
 self.addEventListener('install', e => {
   e.waitUntil(
