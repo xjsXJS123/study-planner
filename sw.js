@@ -1,5 +1,5 @@
 // StudyBuddy v3.3 — Force fresh cache
-const CACHE_NAME = 'studybuddy-v3.3-final';
+const CACHE_NAME = 'studybuddy-v3.4-'+Date.now();
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
