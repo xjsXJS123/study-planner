@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0F0F1A">
+<meta name="description" content="学伴 StudyBuddy — RPG 游戏化智能学习助手">
+<title>学伴 StudyBuddy</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0F0F1A;--card-bg:#1A1A2E;--gold:#FFD700;--gold-dim:#B8960F;
+  --purple:#7C3AED;--purple-light:#A78BFA;--purple-bg:rgba(124,58,237,0.15);
+  --text:#E2E8F0;--text2:#94A3B8;--text3:#64748B;
+  --success:#10B981;--danger:#EF4444;--warning:#F59E0B;
+  --border:rgba(255,255,255,0.08);--radius:16px;--radius-sm:10px;
+  --bottom-nav-h:68px;--top-safe:env(safe-area-inset-top,0px);--bottom-safe:env(safe-area-inset-bottom,0px);
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  padding-bottom:calc(var(--bottom-nav-h) + var(--bottom-safe) + 16px);
+  padding-top:var(--top-safe);min-height:100vh;
+}
+/* Header */
+.header{padding:16px 20px 8px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;background:var(--bg)}
+.header h1{font-size:20px;font-weight:700;background:linear-gradient(135deg,var(--gold),var(--purple-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.level-badge{display:flex;align-items:center;gap:4px;background:var(--purple-bg);padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;color:var(--purple-light)}
+/* Bottom Nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--card-bg);border-top:1px solid var(--border);display:flex;height:var(--bottom-nav-h);padding-bottom:var(--bottom-safe);box-shadow:0 -4px 20px rgba(0,0,0,.3)}
+.bottom-nav button{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--text3);cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.bottom-nav button.active{color:var(--gold);font-weight:600}
+.bottom-nav button .icon{font-size:22px;line-height:1}
+/* Pages */
+.page{display:none;padding:0 16px;animation:fadeIn .25s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes popIn{0%{transform:scale(0);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+/* Cards */
+.card{background:var(--card-bg);border-radius:var(--radius);padding:16px;margin-bottom:12px;border:1px solid var(--border)}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.card-header h3{font-size:15px;font-weight:600;color:var(--text)}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border-radius:24px;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-dim));color:#1a1a00}
+.btn-gold:active{transform:scale(.97);opacity:.9}
+.btn-purple{background:var(--purple);color:#fff}
+.btn-purple:active{background:#6D28D9;transform:scale(.97)}
+.btn-outline{background:transparent;color:var(--purple-light);border:1.5px solid var(--purple)}
+.btn-sm{padding:6px 14px;font-size:13px;border-radius:20px}
+.btn-block{width:100%}
+.btn:disabled{opacity:.4;pointer-events:none}
+/* Forms */
+.input,.select{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;background:rgba(255,255,255,0.04);color:var(--text);outline:none;transition:border-color .15s;font-family:inherit}
+.input:focus,.select:focus{border-color:var(--purple)}
+.label{display:block;font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px}
+.form-group{margin-bottom:14px}
+/* Tags */
+.tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.tag-gold{background:rgba(255,215,0,0.15);color:var(--gold)}
+.tag-purple{background:var(--purple-bg);color:var(--purple-light)}
+.tag-success{background:rgba(16,185,129,0.15);color:var(--success)}
+.tag-danger{background:rgba(239,68,68,0.15);color:var(--danger)}
+.tag-warning{background:rgba(245,158,11,0.15);color:var(--warning)}
+/* Progress */
+.progress-bar{height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.progress-gold{background:linear-gradient(90deg,var(--gold),var(--gold-dim))}
+.progress-purple{background:linear-gradient(90deg,var(--purple),var(--purple-light))}
+/* Task items */
+.task-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:var(--radius-sm);background:rgba(255,255,255,0.02);margin-bottom:8px;transition:all .2s}
+.task-item.completed{opacity:.4}
+.task-item.completed .task-title{text-decoration:line-through}
+.task-checkbox{width:24px;height:24px;border-radius:50%;border:2px solid var(--text3);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s;font-size:12px;color:transparent}
+.task-checkbox.done{background:var(--success);border-color:var(--success);color:#fff}
+.task-info{flex:1;min-width:0}
+.task-title{font-size:14px;font-weight:500}
+.task-meta{font-size:12px;color:var(--text2);margin-top:2px}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
+.modal{background:var(--card-bg);border-radius:20px 20px 0 0;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;padding:20px;animation:slideUp .25s ease;border:1px solid var(--border);border-bottom:none}
+.modal h2{font-size:18px;font-weight:700;margin-bottom:16px;color:var(--gold)}
+.modal-actions{display:flex;gap:10px;margin-top:20px}
+.modal-actions .btn{flex:1}
+/* Energy Bar */
+.energy-bar{display:flex;gap:6px;margin:12px 0}
+.energy-slot{width:32px;height:32px;border-radius:8px;border:2px solid var(--border);transition:all .3s}
+.energy-slot.filled{background:linear-gradient(135deg,var(--gold),var(--purple));border-color:transparent;box-shadow:0 0 12px rgba(124,58,237,.3)}
+.energy-slot.empty{border-color:rgba(255,255,255,0.1)}
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat-card{background:var(--card-bg);border-radius:var(--radius);padding:14px;text-align:center;border:1px solid var(--border)}
+.stat-card .value{font-size:28px;font-weight:700;color:var(--gold)}
+.stat-card .label{font-size:12px;color:var(--text2);margin-top:2px}
+/* FAB */
+.fab{position:fixed;bottom:calc(var(--bottom-nav-h) + var(--bottom-safe) + 20px);right:20px;z-index:90;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--purple));color:#fff;border:none;font-size:28px;cursor:pointer;box-shadow:0 4px 20px rgba(124,58,237,.4);display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:transform .15s}
+.fab:active{transform:scale(.9)}
+/* Toast */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:300;background:#1E293B;color:#fff;padding:12px 24px;border-radius:24px;font-size:14px;font-weight:500;animation:fadeIn .3s ease;box-shadow:0 8px 30px rgba(0,0,0,.5);pointer-events:none;border:1px solid var(--border)}
+/* Wizard steps */
+.step-indicator{display:flex;justify-content:center;gap:8px;margin-bottom:20px}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);transition:all .3s}
+.step-dot.active{background:var(--gold);box-shadow:0 0 8px var(--gold);width:24px;border-radius:4px}
+.step-dot.done{background:var(--success)}
+/* Chat bubbles */
+.chat-area{display:flex;flex-direction:column;gap:12px;padding:8px 0}
+.chat-msg{max-width:85%;padding:12px 16px;border-radius:18px;font-size:14px;line-height:1.5;animation:fadeIn .3s ease}
+.chat-msg.ai{align-self:flex-start;background:var(--card-bg);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-msg.user{align-self:flex-end;background:linear-gradient(135deg,var(--purple),#5B21B6);border-bottom-right-radius:4px}
+/* Achievement grid */
+.achieve-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.achieve-card{text-align:center;padding:16px 8px;border-radius:var(--radius-sm);background:rgba(255,255,255,0.02);border:1px solid var(--border);transition:all .3s}
+.achieve-card.unlocked{border-color:var(--gold);background:rgba(255,215,0,0.05)}
+.achieve-card.locked{opacity:.4}
+.achieve-card .icon{font-size:36px;margin-bottom:4px}
+.achieve-card .name{font-size:11px;font-weight:600}
+.achieve-card .cond{font-size:10px;color:var(--text3);margin-top:2px}
+/* Skill tree */
+.skill-row{display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;border-radius:var(--radius-sm);background:rgba(255,255,255,0.02);border:1px solid var(--border)}
+.skill-icon{font-size:28px;width:44px;text-align:center}
+.skill-info{flex:1}
+.skill-name{font-weight:600;font-size:14px}
+.skill-effect{font-size:12px;color:var(--text2)}
+.skill-level{font-size:13px;color:var(--gold);font-weight:600}
+/* Exercise card */
+.exercise-card{padding:16px;border-radius:var(--radius);background:rgba(255,255,255,0.02);border:1px solid var(--border);margin-bottom:12px}
+.exercise-card .q-title{font-size:14px;font-weight:600;margin-bottom:10px}
+.choice-btn{display:block;width:100%;text-align:left;padding:10px 14px;margin-bottom:6px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;transition:all .15s}
+.choice-btn:active{background:rgba(255,255,255,0.05)}
+.choice-btn.correct{border-color:var(--success);background:rgba(16,185,129,0.1)}
+.choice-btn.wrong{border-color:var(--danger);background:rgba(239,68,68,0.1)}
+/* Level up overlay */
+.levelup-overlay{position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fadeIn .3s ease}
+.levelup-content{text-align:center;animation:popIn .5s ease}
+.levelup-content .lv{font-size:72px;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--purple-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+/* Empty state */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-state .icon{font-size:56px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+/* XP particle */
+@keyframes xpFloat{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-60px) scale(1.5)}}
+.xp-particle{position:fixed;pointer-events:none;z-index:220;font-weight:900;font-size:18px;color:var(--gold);animation:xpFloat 1s ease-out forwards}
+/* Install */
+.install-banner{display:none;background:linear-gradient(135deg,var(--purple),#5B21B6);color:#fff;padding:12px 16px;border-radius:var(--radius);margin-bottom:16px;align-items:center;gap:12px}
+.install-banner.show{display:flex}
+.install-banner .msg{flex:1;font-size:13px}
+.install-banner .btn{background:#fff;color:var(--purple);white-space:nowrap}
+/* Responsive */
+@media(min-width:500px){.page{padding:0 24px;max-width:500px;margin:0 auto}.header,.bottom-nav{max-width:500px;margin:0 auto;left:50%;transform:translateX(-50%);width:100%}}
+
+/* Grid for plan cards */
+.plan-grid{display:grid;gap:12px}
+.plan-card{border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:var(--card-bg);cursor:pointer;transition:all .15s}
+.plan-card:active{transform:scale(.98)}
+.plan-card .p-name{font-size:16px;font-weight:600;margin-bottom:4px}
+.plan-card .p-meta{font-size:12px;color:var(--text2);display:flex;gap:12px;flex-wrap:wrap}
+
+/* Concept tag cloud */
+.concept-tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.concept-tag{padding:4px 12px;border-radius:12px;font-size:12px;background:var(--purple-bg);color:var(--purple-light)}
+
+/* XP bar */
+.xp-bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<div id="xpParticles"></div>
+
+<!-- Header -->
+<header class="header">
+  <h1>⚔️ 学伴</h1>
+  <div class="level-badge">⬆ Lv.<span id="headerLevel">1</span></div>
+</header>
+
+<!-- Install Banner -->
+<div class="install-banner" id="installBanner">
+  <span class="msg">📲 安装到手机桌面</span>
+  <button class="btn btn-sm" onclick="installApp()">安装</button>
+  <button class="btn btn-sm" style="background:transparent;color:#fff" onclick="this.parentElement.classList.remove('show')">✕</button>
+</div>
+
+<!-- Page: Plans List -->
+<div class="page active" id="page-plans">
+  <div class="energy-bar" id="energyBar"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 style="font-size:18px">📋 学习计划</h2>
+    <span style="font-size:13px;color:var(--text2)" id="activeStatus"></span>
+  </div>
+  <div id="planList"></div>
+</div>
+
+<!-- Page: Adventure -->
+<div class="page" id="page-adventure">
+  <h2 style="font-size:18px;margin-bottom:16px">⚔️ 冒险日志</h2>
+
+  <!-- Character -->
+  <div class="card" style="text-align:center">
+    <div style="font-size:64px" id="charEmoji">⚔️</div>
+    <h3 id="charName" style="color:var(--gold)">学徒</h3>
+    <div class="xp-bar-label"><span>EXP</span><span id="xpText">0 / 100</span></div>
+    <div class="progress-bar"><div class="progress-fill progress-gold" id="xpBar" style="width:0%"></div></div>
+    <div style="margin-top:8px;font-size:12px;color:var(--text3)">技能点：<span id="skillPoints" style="color:var(--gold)">0</span></div>
+  </div>
+
+  <!-- Energy -->
+  <div class="card">
+    <h3 style="font-size:14px;margin-bottom:8px">🔋 本周能量</h3>
+    <div class="energy-bar" id="energyBarLarge"></div>
+    <div style="font-size:12px;color:var(--text2)">碎片：<span id="fragments" style="color:var(--gold)">0</span></div>
+  </div>
+
+  <!-- Skills -->
+  <div class="card">
+    <h3 style="font-size:14px;margin-bottom:12px">🌟 技能树</h3>
+    <div id="skillTree"></div>
+  </div>
+
+  <!-- Achievements -->
+  <div class="card">
+    <h3 style="font-size:14px;margin-bottom:12px">🏆 成就徽章</h3>
+    <div class="achieve-grid" id="achievementWall"></div>
+  </div>
+
+  <!-- Adventure Log -->
+  <div class="card" style="border-color:var(--purple)">
+    <p style="font-size:13px;color:var(--purple-light);font-style:italic" id="adventureLog"></p>
+  </div>
+</div>
+
+<!-- Page: Settings -->
+<div class="page" id="page-settings">
+  <h2 style="font-size:18px;margin-bottom:16px">⚙️ 设置</h2>
+
+  <div class="card">
+    <h3 style="font-size:15px;margin-bottom:12px">🔑 DeepSeek API</h3>
+    <div id="apiStatus"></div>
+    <button class="btn btn-purple btn-block" onclick="openApiWizard()" style="margin-top:8px">🔧 API 配置向导</button>
+  </div>
+
+  <div class="card">
+    <h3 style="font-size:15px;margin-bottom:12px">📊 复习强度</h3>
+    <div id="reviewModeSetting"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="font-size:15px;margin-bottom:12px">💾 数据管理</h3>
+    <button class="btn btn-outline btn-block" onclick="exportData()" style="margin-bottom:8px">📤 导出学习数据</button>
+    <button class="btn btn-outline btn-block" onclick="importDataPrompt()">📥 恢复数据</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+
+  <div class="card" style="border-color:var(--danger)">
+    <h3 style="font-size:15px;color:var(--danger);margin-bottom:8px">⚠️ 危险操作</h3>
+    <button class="btn btn-block" style="background:var(--danger);color:#fff" onclick="resetAll()">🗑 清除所有数据</button>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">学伴 StudyBuddy v2.0 · PWA</p>
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <button class="active" data-page="plans"><span class="icon">📋</span>计划</button>
+  <button data-page="adventure"><span class="icon">⚔️</span>冒险</button>
+  <button data-page="settings"><span class="icon">⚙️</span>设置</button>
+</nav>
+
+<!-- FAB -->
+<button class="fab" id="fabBtn" onclick="openPlanWizard()">+</button>
+
+<!-- Modal: Plan Wizard -->
+<div class="modal-overlay" id="wizardModal" style="display:none">
+<div class="modal" id="wizardModalInner">
+  <div class="step-indicator" id="stepIndicator"></div>
+  <div id="wizardContent"></div>
+</div>
+</div>
+
+<!-- Modal: Plan Detail -->
+<div class="modal-overlay" id="planDetailModal" style="display:none">
+<div class="modal" id="planDetailInner"></div>
+</div>
+
+<!-- Modal: Feynman Challenge -->
+<div class="modal-overlay" id="feynmanModal" style="display:none">
+<div class="modal" id="feynmanInner" style="display:flex;flex-direction:column;max-height:80vh"></div>
+</div>
+
+<!-- Modal: Practice Exercises -->
+<div class="modal-overlay" id="exerciseModal" style="display:none">
+<div class="modal" id="exerciseInner"></div>
+</div>
+
+<!-- Modal: Review -->
+<div class="modal-overlay" id="reviewModal" style="display:none">
+<div class="modal" id="reviewInner"></div>
+</div>
+
+<!-- Modal: API Setup -->
+<div class="modal-overlay" id="apiModal" style="display:none">
+<div class="modal" id="apiInner"></div>
+</div>
+
+<!-- Modal: Achievement Unlock -->
+<div class="modal-overlay" id="achievementModal" style="display:none">
+<div class="modal" style="text-align:center">
+  <div style="font-size:64px;animation:popIn .5s ease" id="achieveIcon">🏆</div>
+  <h2 style="color:var(--gold);margin:8px 0" id="achieveTitle"></h2>
+  <p style="color:var(--text2)" id="achieveDesc"></p>
+  <p style="color:var(--purple-light);font-size:13px;margin-top:4px" id="achieveReward"></p>
+  <button class="btn btn-gold btn-block" style="margin-top:16px" onclick="document.getElementById('achievementModal').style.display='none'">太棒了！</button>
+</div>
+</div>
+
+<!-- Toast -->
+<div id="toastContainer"></div>
+
+<script>
+// ═══════════════════════════════════════
+// DATA LAYER
+// ═══════════════════════════════════════
+const STORAGE_KEY = 'studybuddy_v2';
+let D = {
+  user: { charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false },
+  plans: [], tasks: [], reviewItems: [], exerciseRecords: [], achievements: [],
+  apiKey: '', settings: { reviewMode:'standard', lang:'zh' }
+};
+
+const ACHIEVEMENTS = [
+  { key:'streak7', icon:'🗓', title:'坚持一周', desc:'连续7天活跃', reward:'解锁专属主题', cond:p=>p.user.streakDays>=7 },
+  { key:'streak30', icon:'📅', title:'月度勇士', desc:'连续30天活跃', reward:'解锁知识分享卡', cond:p=>p.user.streakDays>=30 },
+  { key:'firstPlan', icon:'🎓', title:'学有所成', desc:'完成第一个学习计划', reward:'解锁导师模式', cond:p=>p.plans.some(x=>x.status==='completed') },
+  { key:'energyMaster', icon:'🔋', title:'能量满满', desc:'连续4周能量≥6', reward:'能量上限+1', cond:p=>(p.user.energyFragments||0)>=12 },
+  { key:'memoryMaster', icon:'🧠', title:'记忆大师', desc:'掌握50个概念', reward:'记忆力+1', cond:p=>p.reviewItems.filter(x=>x.isMastered).length>=50 },
+  { key:'feynman20', icon:'💬', title:'费曼信徒', desc:'完成20次费曼挑战', reward:'洞察力+1', cond:p=>(p.user.feynmanCount||0)>=20 },
+  { key:'exercise50', icon:'📝', title:'刷题狂人', desc:'完成50次习题', reward:'XP加成10%', cond:p=>(p.user.exerciseCount||0)>=50 },
+  { key:'level10', icon:'⭐', title:'登堂入室', desc:'达到10级', reward:'专属称号', cond:p=>p.user.level>=10 },
+];
+
+function load(){ try{ const r=localStorage.getItem(STORAGE_KEY); if(r){ const d=JSON.parse(r); D={...D,...d}; } }catch(e){} migrate(); }
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(D)); }
+function uid(){ return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+function today(){ return new Date().toISOString().slice(0,10); }
+function fmt(d){ const dd=new Date(d+'T00:00:00'); return (dd.getMonth()+1)+'月'+dd.getDate()+'日'; }
+function addDays(d,n){ const dd=new Date(d+'T00:00:00'); dd.setDate(dd.getDate()+n); return dd.toISOString().slice(0,10); }
+function daysBetween(a,b){ return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000); }
+function migrate(){
+  D.user = D.user || { charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false };
+  D.user.skills = D.user.skills || {focus:0,memory:0,insight:0};
+  D.user.energyFragments = D.user.energyFragments || 0;
+  D.user.feynmanCount = D.user.feynmanCount || 0;
+  D.user.exerciseCount = D.user.exerciseCount || 0;
+  D.plans = D.plans || []; D.tasks = D.tasks || []; D.reviewItems = D.reviewItems || [];
+  D.exerciseRecords = D.exerciseRecords || []; D.achievements = D.achievements || [];
+  D.apiKey = D.apiKey || ''; D.settings = D.settings || { reviewMode:'standard', lang:'zh' };
+}
+
+// ═══════════════════════════════════════
+// RPG / GAMIFICATION ENGINE
+// ═══════════════════════════════════════
+function xpForLevel(lv){ return 100 * lv; }
+function calcLevel(xp){ let lv=1; while(xp >= xpForLevel(lv)){ xp -= xpForLevel(lv); lv++; } return lv; }
+function xpProgress(xp){ let lv=calcLevel(xp); let total=0; for(let i=1;i<lv;i++) total+=xpForLevel(i); return {level:lv, current:xp-total, needed:xpForLevel(lv)}; }
+
+function addXp(amount, reason){
+  const bonus = 1 + D.user.skills.focus * 0.05;
+  const total = Math.round(amount * bonus);
+  D.user.xp += total;
+  const oldLv = D.user.level;
+  D.user.level = calcLevel(D.user.xp);
+  save();
+  spawnXpParticle(total, reason);
+  if(D.user.level > oldLv) showLevelUp(D.user.level);
+  checkAchievements();
+}
+
+function spawnXpParticle(amount, reason){
+  const el = document.createElement('div');
+  el.className = 'xp-particle';
+  el.textContent = `+${amount} XP`;
+  el.style.left = (40 + Math.random()*30) + '%';
+  el.style.top = '50%';
+  document.getElementById('xpParticles').appendChild(el);
+  setTimeout(()=>el.remove(), 1000);
+}
+
+function showLevelUp(lv){
+  const ov = document.createElement('div');
+  ov.className = 'levelup-overlay';
+  ov.innerHTML = `<div class="levelup-content">
+    <div style="font-size:20px;color:var(--text2)">LEVEL UP!</div>
+    <div class="lv">${lv}</div>
+    <p style="color:var(--gold);margin:8px 0">🎉 获得 1 个技能点！</p>
+    <button class="btn btn-gold" id="lvCloseBtn">继续冒险</button>
+  </div>`;
+  ov.onclick = e => { if(e.target===ov||e.target.id==='lvCloseBtn') ov.remove(); };
+  D.user.skillPoints++;
+  save();
+  document.body.appendChild(ov);
+  setTimeout(()=>ov.remove(), 5000);
+}
+
+function useEnergy(){
+  checkEnergyReset();
+  if(D.user.energy > 0){ D.user.energy--; }
+  else { D.user.energyFragments = (D.user.energyFragments||0) + 1; }
+  D.user.lastActiveDate = today();
+  save();
+}
+
+function checkEnergyReset(){
+  const now = new Date();
+  const day = now.getDay();
+  const monday = addDays(today(), -(day===0?6:day-1));
+  if(!D.user.lastEnergyReset || D.user.lastEnergyReset < monday){
+    const unused = D.user.energy;
+    if(unused > 0) D.user.energyFragments = (D.user.energyFragments||0) + unused;
+    D.user.energy = 7;
+    D.user.lastEnergyReset = monday;
+    save();
+  }
+}
+
+function getActiveStatus(){
+  checkEnergyReset();
+  const used = 7 - D.user.energy;
+  const totalDays = D.user.lastEnergyReset ? daysBetween(D.user.lastEnergyReset, today()) + 1 : 1;
+  if(used >= 5) return '🔥 活跃';
+  if(used >= 3) return '🟡 正常';
+  return '💤 摸鱼中';
+}
+
+// ═══════════════════════════════════════
+// SM-2 SPACED REPETITION ALGORITHM
+// ═══════════════════════════════════════
+function sm2Calculate(quality, repetitions, easinessFactor, interval){
+  let ef = easinessFactor || 2.5;
+  let reps = repetitions;
+  let newInterval = 1;
+  if(quality === 2){ newInterval = Math.round(interval * ef); ef += 0.1; reps++; }
+  else if(quality === 1){ newInterval = Math.round(interval * ef); reps++; }
+  else { newInterval = 1; ef = Math.max(1.3, ef - 0.2); reps = 0; }
+  return { interval: newInterval, ef, repetitions: reps };
+}
+
+function createReviewItems(taskId, planId, concepts){
+  concepts.forEach(concept => {
+    if(!concept || !concept.trim()) return;
+    // Check duplicate
+    const exists = D.reviewItems.find(r => r.planId===planId && r.concept===concept);
+    if(exists) return;
+    D.reviewItems.push({
+      id: uid(), planId, taskId, concept,
+      interval:1, ef:2.5, repetitions:0, nextReviewDate: addDays(today(),1),
+      consecutiveEasy:0, priority:0, isMastered:false, createdAt: today()
+    });
+  });
+}
+
+function getDueReviews(planId, mode){
+  checkEnergyReset();
+  let items = D.reviewItems.filter(r => r.planId===planId && !r.isMastered && r.nextReviewDate <= today());
+  items.sort((a,b) => (b.priority||0) - (a.priority||0));
+  if(mode === 'relaxed') items = items.slice(0,3);
+  if(mode === 'hardcore'){
+    const extra = D.reviewItems.filter(r => r.planId===planId && !r.isMastered && r.nextReviewDate > today());
+    items = [...items, ...extra.slice(0,5)];
+  }
+  return items;
+}
+
+function processReview(itemId, quality){
+  const item = D.reviewItems.find(r => r.id===itemId);
+  if(!item) return;
+  const result = sm2Calculate(quality, item.repetitions, item.ef, item.interval);
+  Object.assign(item, result);
+  item.nextReviewDate = addDays(today(), result.interval);
+  if(quality === 2) item.consecutiveEasy++; else item.consecutiveEasy = 0;
+  if(item.consecutiveEasy >= 3) item.isMastered = true;
+  if(item.priority > 0) item.priority = Math.max(0, item.priority - 1);
+  save();
+}
+
+// ═══════════════════════════════════════
+// ACHIEVEMENTS
+// ═══════════════════════════════════════
+function checkAchievements(){
+  ACHIEVEMENTS.forEach(a => {
+    if(D.achievements.includes(a.key)) return;
+    if(a.cond(D)){
+      D.achievements.push(a.key);
+      save();
+      showAchievement(a);
+      if(a.key==='energyMaster') D.user.energy = Math.min(8, D.user.energy+1);
+      if(a.key==='memoryMaster') D.user.skills.memory++;
+      if(a.key==='feynman20') D.user.skills.insight++;
+      if(a.key==='exercise50') D.user.xp += 50; // bonus
+    }
+  });
+}
+
+function showAchievement(a){
+  document.getElementById('achieveIcon').textContent = a.icon;
+  document.getElementById('achieveTitle').textContent = a.title;
+  document.getElementById('achieveDesc').textContent = a.desc;
+  document.getElementById('achieveReward').textContent = '奖励：' + a.reward;
+  document.getElementById('achievementModal').style.display = 'flex';
+}
+
+// ═══════════════════════════════════════
+// STUDY PLAN GENERATOR
+// ═══════════════════════════════════════
+function generateSyllabus(topicName, totalDays, dailyMin, level){
+  const syllabus = [];
+  const phases = [
+    { name:'基础入门', pct:0.4, type:'new' },
+    { name:'核心进阶', pct:0.35, type:'new' },
+    { name:'综合应用', pct:0.15, type:'review' },
+    { name:'冲刺检测', pct:0.1, type:'exam' }
+  ];
+
+  let dayNum = 0;
+  const reviewQueue = [];
+
+  phases.forEach(phase => {
+    const phaseDays = Math.max(1, Math.round(totalDays * phase.pct));
+    for(let i=0; i<phaseDays && dayNum<totalDays; i++){
+      dayNum++;
+      const date = addDays(today(), dayNum-1);
+      const topics = getDayTopics(topicName, phase.name, dayNum, totalDays);
+      const tasks = [];
+
+      if(phase.type === 'new'){
+        tasks.push({id:uid(),type:'new_content',title:`${topicName} · ${topics.main}`,desc:`学习新知识点（${Math.round(dailyMin*0.55)}分钟）`,estMin:Math.round(dailyMin*0.55),concepts:topics.concepts,resRef:''});
+        [1,3,7,14].forEach(iv=>reviewQueue.push({day:dayNum,topic:topics.main,reviewDay:dayNum+iv}));
+      } else if(phase.type === 'review'){
+        tasks.push({id:uid(),type:'review',title:`${topicName} · ${topics.main}`,desc:`费曼输出练习（${Math.round(dailyMin*0.5)}分钟）`,estMin:Math.round(dailyMin*0.5),concepts:topics.concepts,resRef:''});
+      } else {
+        tasks.push({id:uid(),type:'exam',title:`${topicName} · ${topics.main}`,desc:`模拟测试+查漏补缺（${Math.round(dailyMin*0.7)}分钟）`,estMin:Math.round(dailyMin*0.7),concepts:topics.concepts,resRef:''});
+      }
+
+      // Active recall
+      tasks.push({id:uid(),type:'active_recall',title:'🧠 闭卷回忆',desc:'不看资料，闭卷回忆前一天要点（15分钟）',estMin:15,concepts:[],resRef:''});
+
+      // Feynman every 3 days
+      if(dayNum%3===0) tasks.push({id:uid(),type:'feynman',title:'🗣 费曼输出',desc:'假装教一个完全不懂的人（20分钟）',estMin:20,concepts:topics.concepts,resRef:''});
+
+      // Review queue
+      reviewQueue.filter(r=>r.reviewDay===dayNum).forEach(r=>{
+        tasks.push({id:uid(),type:'spaced_review',title:`🔄 间隔复习·${r.topic}`,desc:'艾宾浩斯遗忘曲线节点复习（25分钟）',estMin:25,concepts:[],resRef:''});
+      });
+
+      syllabus.push({day:dayNum, date, tasks, phase:phase.name});
+    }
+  });
+  return syllabus;
+}
+
+function getDayTopics(name, phase, day, total){
+  const topics = {
+    '基础入门': {main:'基础概念与框架',concepts:['核心定义','基本定理','知识框架']},
+    '核心进阶': {main:'重点难点突破',concepts:['核心定理','典型例题','常见陷阱']},
+    '综合应用': {main:'综合运用与实践',concepts:['跨章节综合','实际应用','解题技巧']},
+    '冲刺检测': {main:'全面检测与复盘',concepts:['模拟测试','查漏补缺','考前冲刺']}
+  };
+  const t = topics[phase] || {main:`第${day}天学习`,concepts:['知识点']};
+  t.main = `${t.main}（${day}/${total}）`;
+  return t;
+}
+
+// ═══════════════════════════════════════
+// PLAN WIZARD
+// ═══════════════════════════════════════
+let wizardState = {step:0,topicName:'',totalDays:14,dailyMin:60,level:'beginner',focusTags:[]};
+
+function openPlanWizard(){
+  wizardState = {step:0,topicName:'',totalDays:14,dailyMin:60,level:'beginner',focusTags:[]};
+  document.getElementById('wizardModal').style.display = 'flex';
+  renderWizard();
+}
+
+function renderWizard(){
+  const steps = ['主题','天数','时长','水平','侧重','确认'];
+  document.getElementById('stepIndicator').innerHTML = steps.map((s,i)=>{
+    let cls='step-dot';
+    if(i===wizardState.step) cls+=' active';
+    if(i<wizardState.step) cls+=' done';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+
+  let html = '';
+  const s = wizardState.step;
+  if(s===0) html = renderWizardS0();
+  else if(s===1) html = renderWizardS1();
+  else if(s===2) html = renderWizardS2();
+  else if(s===3) html = renderWizardS3();
+  else if(s===4) html = renderWizardS4();
+  else if(s===5) html = renderWizardS5();
+
+  html += `<div class="modal-actions">
+    ${s>0?`<button class="btn btn-outline" onclick="wizardState.step--;renderWizard()">← 上一步</button>`:''}
+    <button class="btn btn-gold" onclick="wizardNext()">${s===5?'🚀 开始学习':s===4?'确认创建':'下一步 →'}</button>
+  </div>`;
+
+  document.getElementById('wizardContent').innerHTML = html;
+  document.getElementById('wizardModalInner').scrollTop = 0;
+}
+
+function renderWizardS0(){
+  const tags = ['高等数学','英语口语','Python入门','考研政治','日语N3','线性代数','数据结构','机器学习'];
+  return `<h2>📝 想学什么？</h2>
+    <div class="form-group"><input class="input" id="wizTopicInput" value="${wizardState.topicName}" placeholder="输入学习主题..." oninput="wizardState.topicName=this.value"></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:8px">热门选择：</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${tags.map(t=>`<span class="tag tag-purple" style="cursor:pointer;font-size:13px" onclick="wizardState.topicName='${t}';document.getElementById('wizTopicInput').value='${t}';renderWizard()">${t}</span>`).join('')}</div>`;
+}
+
+function renderWizardS1(){
+  const opts = [7,14,30,60,90];
+  return `<h2>📅 计划学多久？</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${opts.map(d=>`<div class="card" style="text-align:center;cursor:pointer;border-color:${wizardState.totalDays===d?'var(--gold)':'var(--border)'}" onclick="wizardState.totalDays=${d};renderWizard()"><h3 style="font-size:28px;color:${wizardState.totalDays===d?'var(--gold)':'var(--text)'}">${d}</h3><p style="font-size:13px;color:var(--text2)">天</p></div>`).join('')}
+    <div class="card" style="text-align:center;cursor:pointer;border-color:${opts.includes(wizardState.totalDays)?'var(--border)':'var(--gold)'}" onclick="const v=prompt('自定义天数：',wizardState.totalDays);if(v&&parseInt(v)>0){wizardState.totalDays=parseInt(v);renderWizard()}"><h3 style="font-size:24px;color:var(--purple-light)">✏️ 自定义</h3><p style="font-size:13px;color:var(--text2)">当前：${wizardState.totalDays}天</p></div></div>`;
+}
+
+function renderWizardS2(){
+  const opts = [15,30,45,60,90,120];
+  return `<h2>⏱ 每天学多久？</h2>
+    <div style="text-align:center;font-size:48px;font-weight:900;color:var(--gold);margin:12px 0">${wizardState.dailyMin}<span style="font-size:20px;color:var(--text2)"> 分钟</span></div>
+    <input type="range" min="15" max="120" step="15" value="${wizardState.dailyMin}" style="width:100%;accent-color:var(--purple)" oninput="wizardState.dailyMin=parseInt(this.value);renderWizard()">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3)"><span>15</span><span>120</span></div>
+    <p style="text-align:center;font-size:13px;color:var(--text2);margin-top:8px">预计完成日期：${fmt(addDays(today(),wizardState.totalDays-1))}</p>`;
+}
+
+function renderWizardS3(){
+  const opts = [{v:'beginner',t:'🟢 零基础',d:'对这个领域完全陌生'},{v:'intermediate',t:'🟡 有一定基础',d:'学过一些但不成体系'},{v:'advanced',t:'🔴 进阶',d:'已有基础，想深入提升'}];
+  return `<h2>🎯 当前水平？</h2>${opts.map(o=>`<div class="card" style="cursor:pointer;border-color:${wizardState.level===o.v?'var(--gold)':'var(--border)'}" onclick="wizardState.level='${o.v}';renderWizard()"><h3>${o.t}</h3><p style="font-size:13px;color:var(--text2)">${o.d}</p></div>`).join('')}`;
+}
+
+function renderWizardS4(){
+  const tags = ['掌握理论','动手实践','通过考试','兴趣拓展'];
+  const focus = wizardState.focusTags;
+  return `<h2>🎯 学习侧重？（多选）</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">${tags.map(t=>`<span class="tag ${focus.includes(t)?'tag-gold':'tag-purple'}" style="cursor:pointer;font-size:14px;padding:8px 16px" onclick="const i=wizardState.focusTags.indexOf('${t}');if(i>=0)wizardState.focusTags.splice(i,1);else wizardState.focusTags.push('${t}');renderWizard()">${t}</span>`).join('')}</div>
+    <p style="font-size:12px;color:var(--text3)">可以跳过，默认综合学习</p>`;
+}
+
+function renderWizardS5(){
+  const levelName = {beginner:'零基础',intermediate:'有一定基础',advanced:'进阶'};
+  return `<h2>✅ 确认计划</h2>
+    <div class="card"><table style="width:100%;font-size:14px">
+      <tr><td style="color:var(--text2);padding:4px 0">主题</td><td style="font-weight:600">${wizardState.topicName||'(未填写)'}</td></tr>
+      <tr><td style="color:var(--text2);padding:4px 0">天数</td><td style="font-weight:600">${wizardState.totalDays} 天</td></tr>
+      <tr><td style="color:var(--text2);padding:4px 0">每日时长</td><td style="font-weight:600">${wizardState.dailyMin} 分钟</td></tr>
+      <tr><td style="color:var(--text2);padding:4px 0">水平</td><td style="font-weight:600">${levelName[wizardState.level]}</td></tr>
+      <tr><td style="color:var(--text2);padding:4px 0">侧重</td><td style="font-weight:600">${wizardState.focusTags.length>0?wizardState.focusTags.join('、'):'综合学习'}</td></tr>
+    </table></div>`;
+}
+
+function wizardNext(){
+  const s = wizardState.step;
+  if(s===0 && !wizardState.topicName.trim()){ toast('请输入学习主题'); return; }
+  if(s===5){ createPlan(); return; }
+  wizardState.step++;
+  if(wizardState.step===5) document.getElementById('wizardModalInner').scrollTop=0;
+  renderWizard();
+}
+
+function createPlan(){
+  const ws = wizardState;
+  if(!ws.topicName.trim()){ toast('请输入学习主题'); return; }
+
+  const syllabus = generateSyllabus(ws.topicName, ws.totalDays, ws.dailyMin, ws.level);
+  const plan = {
+    id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
+    level: ws.level, focusTags: ws.focusTags.join(','), syllabus: JSON.stringify(syllabus),
+    status:'active', createdAt: today(), selectedResource:''
+  };
+  D.plans.push(plan);
+
+  // Create tasks
+  syllabus.forEach(day => {
+    day.tasks.forEach(task => {
+      D.tasks.push({
+        id: task.id, planId: plan.id, planName: ws.topicName,
+        date: day.date, dayNum: day.day,
+        title: task.title, desc: task.desc, type: task.type,
+        estMin: task.estMin, concepts: task.concepts||[], resRef: task.resRef||'',
+        completed: false, rating: 0, xpEarned: 0
+      });
+    });
+  });
+
+  save();
+  document.getElementById('wizardModal').style.display = 'none';
+  renderAll();
+  toast(`✅ 「${ws.topicName}」已创建！\n${ws.totalDays}天学习计划已生成`);
+}
+
+// ═══════════════════════════════════════
+// TASK OPERATIONS
+// ═══════════════════════════════════════
+function toggleTask(taskId){
+  const task = D.tasks.find(t=>t.id===taskId);
+  if(!task) return;
+  task.completed = !task.completed;
+  if(task.completed){
+    task.completedAt = new Date().toISOString();
+    task.xpEarned = 30;
+    useEnergy();
+    addXp(30, '完成任务');
+    if(task.concepts && task.concepts.length>0) createReviewItems(taskId, task.planId, task.concepts);
+    D.user.lastActiveDate = today();
+    save();
+    checkAchievements();
+  } else {
+    task.completedAt = null; task.xpEarned = 0;
+    save();
+  }
+  renderAll();
+}
+
+// ═══════════════════════════════════════
+// FEYNMAN CHALLENGE
+// ═══════════════════════════════════════
+let feynmanState = {planId:null,concept:'',round:1,messages:[],score:0};
+
+function openFeynman(planId, concept){
+  feynmanState = {planId, concept, round:1, messages:[], score:0};
+  addFeynmanMsg('ai', `我们来挑战费曼技巧！🎯\n\n请用你自己的话解释一下「**${concept}**」这个概念。尽量简单明了～`);
+  document.getElementById('feynmanModal').style.display = 'flex';
+  renderFeynman();
+}
+
+function addFeynmanMsg(role, text){
+  feynmanState.messages.push({role, text, id:uid()});
+}
+
+function renderFeynman(){
+  const html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 12px">
+      <h2>🗣 费曼挑战</h2>
+      <span class="tag tag-gold">第 ${feynmanState.round}/3 轮</span>
+      <button onclick="document.getElementById('feynmanModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div class="chat-area" style="flex:1;overflow-y:auto;max-height:50vh" id="feynmanChat">${feynmanState.messages.map(m=>`<div class="chat-msg ${m.role}">${m.text.replace(/\n/g,'<br>')}</div>`).join('')}</div>
+    ${feynmanState.round<=3?`
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <textarea id="feynmanInput" class="input" rows="2" placeholder="写下你的解释..." style="flex:1;resize:none"></textarea>
+      <button class="btn btn-gold" onclick="submitFeynman()">发送</button>
+    </div>`:`
+    <div style="text-align:center;padding:20px">
+      <div style="font-size:48px">${feynmanState.score>=4?'🌟':feynmanState.score>=3?'⭐':'📚'}</div>
+      <p style="color:var(--gold);font-weight:700;margin:8px 0">综合评分：${feynmanState.score}/5</p>
+      <button class="btn btn-gold btn-block" onclick="finishFeynman()">完成挑战</button>
+    </div>`}
+  `;
+  document.getElementById('feynmanInner').innerHTML = html;
+  setTimeout(()=>{
+    const chat = document.getElementById('feynmanChat');
+    if(chat) chat.scrollTop = chat.scrollHeight;
+  },100);
+}
+
+function submitFeynman(){
+  const input = document.getElementById('feynmanInput');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+
+  addFeynmanMsg('user', text);
+  feynmanState.round++;
+
+  // Simulate AI response (in real app would call DeepSeek API)
+  setTimeout(()=>{
+    const round = feynmanState.round - 1;
+    if(round === 1){
+      addFeynmanMsg('ai',`不错！但如果面向一个**完全零基础**的人，你会怎么解释「${feynmanState.concept}」？试着用更通俗的语言～`);
+    } else if(round === 2){
+      addFeynmanMsg('ai',`很好！能举一个**生活中的例子**来说明「${feynmanState.concept}」吗？让抽象的概念变具体 🔍`);
+    } else if(round === 3){
+      feynmanState.score = 3 + Math.floor(Math.random()*3); // 3-5
+      const feedback = feynmanState.score >= 4 ?
+        `太棒了！你真正理解了「${feynmanState.concept}」！解释清晰，例子生动 🌟` :
+        `还不错！「${feynmanState.concept}」的核心你已经抓住了，继续在练习中巩固 💪`;
+      addFeynmanMsg('ai', feedback);
+      feynmanState.round = 4;
+    }
+    renderFeynman();
+  }, 800);
+}
+
+function finishFeynman(){
+  D.user.feynmanCount = (D.user.feynmanCount||0) + 1;
+  const xp = 15;
+  addXp(xp, '费曼挑战');
+  document.getElementById('feynmanModal').style.display = 'none';
+  save();
+  checkAchievements();
+  renderAll();
+  toast(`🗣 费曼挑战完成！+${xp} XP`);
+}
+
+// ═══════════════════════════════════════
+// PRACTICE EXERCISES
+// ═══════════════════════════════════════
+let exerciseState = {planId:null,taskId:null,exercises:[],answers:{},submitted:false};
+
+function openExercises(planId, taskId){
+  const task = D.tasks.find(t=>t.id===taskId);
+  if(!task) return;
+  // Generate mock exercises
+  const exercises = [
+    {id:1,type:'choice',question:`关于「${task.title.replace(/.*·\s*/,'')}」的核心概念，以下哪项描述最准确？`,choices:['A. 它是该领域最重要的基础','B. 它只在特定场景下有用','C. 它是一个被淘汰的概念','D. 以上都不对'],correct:'A',explanation:'作为核心概念，它是后续所有学习内容的基础。'},
+    {id:2,type:'choice',question:'以下哪种学习策略效率最高？',choices:['A. 被动反复阅读','B. 间隔重复+主动回忆','C. 一次性长时间学习','D. 只看不做笔记'],correct:'B',explanation:'研究发现，间隔重复配合主动回忆的记忆效率是被动阅读的3倍。'},
+    {id:3,type:'choice',question:'费曼技巧的核心是什么？',choices:['A. 背诵概念定义','B. 用简单语言向别人解释','C. 做大量练习题','D. 反复抄写笔记'],correct:'B',explanation:'费曼技巧强调：如果你不能简单地解释它，你就没有真正理解它。'}
+  ];
+  exerciseState = {planId, taskId, exercises, answers:{}, submitted:false};
+  document.getElementById('exerciseModal').style.display = 'flex';
+  renderExercises();
+}
+
+function renderExercises(){
+  const ex = exerciseState;
+  const html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>📝 课后习题</h2>
+      <button onclick="document.getElementById('exerciseModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    ${ex.exercises.map((e,i)=>{
+      let eq = '';
+      if(e.type==='choice'){
+        eq = e.choices.map(c=>{
+          let cls = 'choice-btn';
+          if(ex.submitted && ex.answers[e.id]){
+            if(c.startsWith(e.correct)) cls += ' correct';
+            else if(c.startsWith(ex.answers[e.id])) cls += ' wrong';
+          }
+          return `<button class="${cls}" onclick="${ex.submitted?'':`exerciseState.answers[${e.id}]='${c[0]}';renderExercises()`}" style="${ex.answers[e.id]===c[0]&&!ex.submitted?'border-color:var(--gold);background:rgba(255,215,0,0.05)':''}">${c}</button>`;
+        }).join('');
+        if(ex.submitted && ex.answers[e.id]){
+          eq += `<div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(16,185,129,0.1);font-size:13px;color:var(--success)">💡 ${e.explanation}</div>`;
+        }
+      }
+      return `<div class="exercise-card">
+        <div class="q-title">${i+1}. ${e.question} <span class="tag tag-purple">${e.type==='choice'?'🔤选择':'📝问答'}</span></div>
+        ${eq}
+      </div>`;
+    }).join('')}
+    ${!ex.submitted?`<button class="btn btn-gold btn-block" onclick="submitExercises()">📝 提交答案</button>`:`
+    <div class="card" style="text-align:center;border-color:var(--gold)">
+      <div style="font-size:36px">${ex.score>=80?'🎉':'📚'}</div>
+      <h3 style="color:var(--gold)">正确率：${ex.score}%</h3>
+      <p style="font-size:13px;color:var(--text2)">${ex.correct}/${ex.total} 题正确</p>
+      <button class="btn btn-gold btn-block" style="margin-top:12px" onclick="finishExercises()">完成</button>
+    </div>`}
+  `;
+  document.getElementById('exerciseInner').innerHTML = html;
+}
+
+function submitExercises(){
+  const ex = exerciseState;
+  let correct = 0;
+  ex.exercises.forEach(e => {
+    if(ex.answers[e.id] === e.correct[0]) correct++;
+  });
+  ex.total = ex.exercises.length;
+  ex.correct = correct;
+  ex.score = Math.round((correct/ex.total)*100);
+  ex.submitted = true;
+  renderExercises();
+}
+
+function finishExercises(){
+  D.user.exerciseCount = (D.user.exerciseCount||0) + 1;
+  const xp = 20 + (exerciseState.score>=80?10:0);
+  addXp(xp, '课后习题');
+  // Save exercise record
+  D.exerciseRecords.push({
+    id:uid(), planId: exerciseState.planId, taskId: exerciseState.taskId,
+    date: today(), score: exerciseState.score,
+    total: exerciseState.total, correct: exerciseState.correct,
+    weakConcepts: exerciseState.score<80 ? ['需要巩固的概念'] : []
+  });
+  document.getElementById('exerciseModal').style.display = 'none';
+  save();
+  checkAchievements();
+  renderAll();
+  toast(`📝 习题完成！正确率 ${exerciseState.score}% +${xp} XP`);
+}
+
+// ═══════════════════════════════════════
+// REVIEW UI
+// ═══════════════════════════════════════
+function openReview(planId){
+  const items = getDueReviews(planId, D.settings.reviewMode);
+  if(items.length===0){ toast('📭 今天没有需要复习的内容'); return; }
+  let html = `<h2>🔄 间隔复习</h2><p style="color:var(--text2);font-size:13px;margin-bottom:12px">${items.length} 个概念等你复习</p>`;
+  items.forEach(item => {
+    html += `<div class="card" id="reviewItem_${item.id}">
+      <h4 style="margin-bottom:8px">📌 ${item.concept}</h4>
+      <p style="font-size:12px;color:var(--text2)">上次复习：${fmt(item.createdAt)} · 间隔${item.interval}天</p>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-sm" style="background:rgba(239,68,68,0.15);color:var(--danger)" onclick="doReview('${item.id}',0)">😣 困难</button>
+        <button class="btn btn-sm btn-outline" onclick="doReview('${item.id}',1)">😐 正常</button>
+        <button class="btn btn-sm btn-gold" onclick="doReview('${item.id}',2)">😊 轻松</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('reviewInner').innerHTML = html;
+  document.getElementById('reviewModal').style.display = 'flex';
+}
+
+function doReview(itemId, quality){
+  processReview(itemId, quality);
+  const el = document.getElementById('reviewItem_'+itemId);
+  if(el) el.style.opacity = '0.3';
+  addXp(25, '间隔复习');
+  checkAchievements();
+  setTimeout(()=>{
+    const items = getDueReviews(D.reviewItems.find(r=>r.id===itemId)?.planId, D.settings.reviewMode);
+    if(items.length===0){ document.getElementById('reviewModal').style.display='none'; renderAll(); }
+    else openReview(items[0].planId);
+  }, 500);
+}
+
+// ═══════════════════════════════════════
+// API SETUP WIZARD
+// ═══════════════════════════════════════
+let apiWizardStep = 0;
+
+function openApiWizard(){
+  apiWizardStep = 0;
+  document.getElementById('apiModal').style.display = 'flex';
+  renderApiWizard();
+}
+
+function renderApiWizard(){
+  let html = '';
+  if(apiWizardStep===0){
+    html = `<h2>🔑 API Key 科普</h2>
+      <p style="color:var(--text2);margin-bottom:16px">网页版 DeepSeek = 你和 AI 聊天<br>API Key = App 帮你自动聊天的许可证</p>
+      <p style="font-size:13px;color:var(--text3);margin-bottom:16px">配置 API Key 后，可以使用联网搜索、费曼挑战 AI 评价、大纲自动生成等高级功能。</p>
+      <button class="btn btn-gold btn-block" onclick="apiWizardStep=1;renderApiWizard()">🔧 开始配置</button>
+      <button class="btn btn-outline btn-block" style="margin-top:8px" onclick="document.getElementById('apiModal').style.display='none'">📱 继续本地模式</button>`;
+  } else if(apiWizardStep===1){
+    html = `<h2>📝 Step 1：注册 DeepSeek</h2>
+      <p style="color:var(--text2);margin-bottom:16px">访问 platform.deepseek.com，用手机号或邮箱注册账号。</p>
+      <button class="btn btn-gold btn-block" onclick="window.open('https://platform.deepseek.com','_blank')">🌐 打开注册页面</button>
+      <button class="btn btn-outline btn-block" style="margin-top:8px" onclick="apiWizardStep=2;renderApiWizard()">已完成注册 →</button>`;
+  } else if(apiWizardStep===2){
+    html = `<h2>💰 Step 2：小额充值</h2>
+      <p style="color:var(--text2);margin-bottom:12px">投个币，试试看。不需要实名认证，只需 ¥0.5 或 ¥1，够你和 AI 聊好几天。不喜欢？就当请 AI 喝了杯矿泉水 🥤</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">${['0.5','1','3','自定义'].map(v=>`<div class="card" style="text-align:center;cursor:pointer" onclick="apiWizardStep=3;renderApiWizard()"><h3 style="color:var(--gold)">¥${v}</h3></div>`).join('')}</div>
+      <p style="font-size:12px;color:var(--text3)">实名认证后可领 500 万免费 Token，先用充值的玩几天，好用再去认证。</p>
+      <button class="btn btn-outline btn-block" style="margin-top:8px" onclick="apiWizardStep=3;renderApiWizard()">跳过 →</button>`;
+  } else if(apiWizardStep===3){
+    html = `<h2>🔑 Step 3：粘贴 API Key</h2>
+      <p style="color:var(--text2);margin-bottom:12px">在 DeepSeek 平台「API Keys」页面创建新的 Key，粘贴到下方：</p>
+      <input class="input" id="apiKeyInput" value="${D.apiKey||''}" placeholder="sk-xxxxxxxxxxxxxxxx" style="font-family:monospace;font-size:13px">
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-outline btn-block" onclick="const inp=document.getElementById('apiKeyInput');navigator.clipboard.readText().then(t=>{if(t.startsWith('sk-')){inp.value=t;toast('已从剪贴板检测到 Key ✅')}}).catch(()=>{})">📋 自动检测剪贴板</button>
+      </div>
+      <button class="btn btn-gold btn-block" style="margin-top:8px" onclick="saveApiKey()">✅ 保存并验证</button>`;
+  }
+  document.getElementById('apiInner').innerHTML = html;
+}
+
+function saveApiKey(){
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if(!key){ toast('请粘贴 API Key'); return; }
+  if(!key.startsWith('sk-')){ toast('⚠️ Key 格式可能不正确（应以 sk- 开头）'); }
+  D.apiKey = key;
+  save();
+  document.getElementById('apiModal').style.display = 'none';
+  toast('✅ API Key 已保存！');
+  renderAll();
+}
+
+// ═══════════════════════════════════════
+// DATA EXPORT / IMPORT
+// ═══════════════════════════════════════
+function exportData(){
+  const blob = new Blob([JSON.stringify(D, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `学伴_备份_${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('✅ 数据已导出');
+}
+
+function importDataPrompt(){ document.getElementById('importFile').click(); }
+
+function importData(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      if(data.plans && data.user){
+        if(confirm('导入将覆盖当前数据，确定继续吗？\n建议先导出备份。')){
+          D = data; migrate(); save(); renderAll();
+          toast('✅ 数据已恢复');
+        }
+      } else { toast('⚠️ 文件格式不正确'); }
+    }catch(err){ toast('⚠️ 文件解析失败'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function resetAll(){
+  if(confirm('确定清除所有数据吗？此操作不可撤销！') && confirm('再次确认：删除所有学习记录？')){
+    localStorage.removeItem(STORAGE_KEY);
+    D = { user:{ charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false }, plans:[], tasks:[], reviewItems:[], exerciseRecords:[], achievements:[], apiKey:'', settings:{ reviewMode:'standard', lang:'zh' } };
+    renderAll();
+    toast('🗑 所有数据已清除');
+  }
+}
+
+// ═══════════════════════════════════════
+// SKILL TREE
+// ═══════════════════════════════════════
+function upgradeSkill(skill){
+  if(D.user.skillPoints <= 0){ toast('没有可用技能点！升级获得技能点'); return; }
+  D.user.skillPoints--;
+  D.user.skills[skill]++;
+  save();
+  renderAll();
+  toast(`🌟 ${skill==='focus'?'专注力':skill==='memory'?'记忆力':'洞察力'} Lv.${D.user.skills[skill]}！`);
+}
+
+// ═══════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════
+function renderAll(){
+  checkEnergyReset();
+  renderHeader();
+  renderPlans();
+  renderAdventure();
+  renderSettings();
+  updateEnergyBars();
+}
+
+function renderHeader(){
+  document.getElementById('headerLevel').textContent = D.user.level;
+}
+
+function updateEnergyBars(){
+  const used = 7 - D.user.energy;
+  const html = Array.from({length:7},(_,i)=>`<div class="energy-slot ${i<D.user.energy?'filled':'empty'}"></div>`).join('');
+  document.querySelectorAll('.energy-bar').forEach(el=>el.innerHTML=html);
+  document.getElementById('fragments').textContent = D.user.energyFragments||0;
+}
+
+function renderPlans(){
+  document.getElementById('activeStatus').textContent = getActiveStatus();
+  updateEnergyBars();
+
+  const container = document.getElementById('planList');
+  if(D.plans.length===0){
+    container.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>还没有学习计划<br>点击右下角 + 开始</p></div>';
+    return;
+  }
+  container.innerHTML = `<div class="plan-grid">${D.plans.map(plan=>{
+    const tasks = D.tasks.filter(t=>t.planId===plan.id);
+    const done = tasks.filter(t=>t.completed).length;
+    const total = tasks.length;
+    const pct = total>0?Math.round(done/total*100):0;
+    const todayTasks = tasks.filter(t=>t.date===today() && !t.completed);
+    const dueReviews = getDueReviews(plan.id, D.settings.reviewMode).length;
+
+    return `<div class="plan-card" onclick="openPlanDetail('${plan.id}')">
+      <div class="p-name">${plan.topicName}</div>
+      <div class="p-meta">
+        <span>${plan.totalDays}天</span><span>·</span><span>${plan.dailyMin}分钟/天</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill progress-purple" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
+        <span style="color:var(--text2)">进度 ${pct}%</span>
+        <span>${todayTasks.length>0?`📋 ${todayTasks.length} 个任务`:dueReviews>0?`🔄 ${dueReviews} 个复习`:'✅ 今日完成'}</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function openPlanDetail(planId){
+  const plan = D.plans.find(p=>p.id===planId);
+  if(!plan) return;
+  const todayTasks = D.tasks.filter(t=>t.planId===planId && t.date===today());
+  const dueReviews = getDueReviews(planId, D.settings.reviewMode);
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>📖 ${plan.topicName}</h2>
+    <button onclick="document.getElementById('planDetailModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+  </div>`;
+
+  // Today's tasks
+  html += `<h3 style="font-size:15px;margin-bottom:8px;color:var(--gold)">📋 今日任务</h3>`;
+  if(todayTasks.length===0){
+    html += '<p style="color:var(--text3);font-size:14px;margin-bottom:12px">今天没有任务～</p>';
+  } else {
+    html += todayTasks.map(t=>`
+      <div class="task-item ${t.completed?'completed':''}">
+        <div class="task-checkbox ${t.completed?'done':''}" onclick="event.stopPropagation();toggleTask('${t.id}')">${t.completed?'✓':''}</div>
+        <div class="task-info">
+          <div class="task-title">${t.title}</div>
+          <div class="task-meta">${t.desc} · ${t.estMin}min</div>
+          <div class="concept-tags">${(t.concepts||[]).map(c=>`<span class="concept-tag">${c}</span>`).join('')}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+          <span style="font-size:11px;color:var(--text3)">${t.estMin}min</span>
+          ${!t.completed && t.type==='new_content'?`<button class="btn btn-sm btn-purple" style="font-size:11px" onclick="event.stopPropagation();openFeynman('${planId}','${(t.concepts||['概念'])[0]}')">🗣</button>`:''}
+          ${!t.completed && t.type==='new_content'?`<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="event.stopPropagation();openExercises('${planId}','${t.id}')">📝</button>`:''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Upcoming days
+  const upcoming = D.tasks.filter(t=>t.planId===planId && t.date>today() && !t.completed).slice(0,10);
+  if(upcoming.length>0){
+    html += `<h3 style="font-size:15px;margin:16px 0 8px;color:var(--purple-light)">📅 即将到来</h3>`;
+    const byDate = {};
+    upcoming.forEach(t=>{ if(!byDate[t.date]) byDate[t.date]=[]; byDate[t.date].push(t); });
+    Object.entries(byDate).forEach(([date,tasks])=>{
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text2)">${fmt(date)}</span> · ${tasks.length}个任务
+      </div>`;
+    });
+  }
+
+  // Actions
+  html += `<div style="display:flex;gap:8px;margin-top:16px">
+    <button class="btn btn-purple btn-block" onclick="event.stopPropagation();openReview('${planId}')">🔄 间隔复习 (${dueReviews})</button>
+  </div>
+  <button class="btn btn-outline btn-block" style="margin-top:8px" onclick="event.stopPropagation();if(confirm('确定删除「${plan.topicName}」？')){D.plans=D.plans.filter(p=>p.id!=='${planId}');D.tasks=D.tasks.filter(t=>t.planId!=='${planId}');D.reviewItems=D.reviewItems.filter(r=>r.planId!=='${planId}');save();document.getElementById('planDetailModal').style.display='none';renderAll();toast('已删除')}">🗑 删除此计划</button>`;
+
+  document.getElementById('planDetailInner').innerHTML = html;
+  document.getElementById('planDetailModal').style.display = 'flex';
+}
+
+function renderAdventure(){
+  const u = D.user;
+  const chars = {apprentice:{e:'⚔️',n:'学徒',d:'均衡发展'},ranger:{e:'🏹',n:'游侠',d:'专注力强'},mage:{e:'🔮',n:'法师',d:'洞察力强'}};
+  const ch = chars[u.charClass]||chars.apprentice;
+  document.getElementById('charEmoji').textContent = ch.e;
+  document.getElementById('charName').textContent = `${ch.n} · ${ch.d}`;
+
+  const xp = xpProgress(u.xp);
+  document.getElementById('xpText').textContent = `${xp.current} / ${xp.needed} XP`;
+  document.getElementById('xpBar').style.width = (xp.current/xp.needed*100)+'%';
+  document.getElementById('skillPoints').textContent = u.skillPoints;
+
+  updateEnergyBars();
+
+  // Skills
+  document.getElementById('skillTree').innerHTML = [
+    {key:'focus',icon:'🎯',name:'专注力',effect:`每日XP加成 +${u.skills.focus*5}%`,lv:u.skills.focus},
+    {key:'memory',icon:'🧠',name:'记忆力',effect:`间隔重复间隔延长 ${u.skills.memory*10}%`,lv:u.skills.memory},
+    {key:'insight',icon:'🔍',name:'洞察力',effect:`费曼挑战评分门槛降低 ${u.skills.insight*5}%`,lv:u.skills.insight},
+  ].map(s=>`<div class="skill-row">
+    <div class="skill-icon">${s.icon}</div>
+    <div class="skill-info"><div class="skill-name">${s.name}</div><div class="skill-effect">${s.effect}</div></div>
+    <div class="skill-level">Lv.${s.lv}</div>
+    ${u.skillPoints>0?`<button class="btn btn-sm btn-gold" onclick="upgradeSkill('${s.key}')">⬆</button>`:''}
+  </div>`).join('');
+
+  // Achievements
+  document.getElementById('achievementWall').innerHTML = ACHIEVEMENTS.map(a=>{
+    const unlocked = D.achievements.includes(a.key);
+    return `<div class="achieve-card ${unlocked?'unlocked':'locked'}">
+      <div class="icon">${unlocked?a.icon:'🔒'}</div>
+      <div class="name">${unlocked?a.title:'???'}</div>
+      <div class="cond">${unlocked?a.reward:a.cond?.toString().includes('streak')?'需要坚持':'需要达成条件'}</div>
+    </div>`;
+  }).join('');
+
+  // Adventure log
+  const logs = [
+    '⚔️ 今天的冒险旅程已经开启！每一个任务都是你升级路上的一个小怪，去击败它们吧！',
+    '🔮 法师的洞察力告诉你：温故而知新，别忘了间隔复习哦～',
+    '🏹 游侠的直觉：今天的学习任务中藏着不少宝藏概念！',
+    '⚔️ 学徒之路：每次费曼输出都是一次小Boss战，赢了就升级！',
+  ];
+  document.getElementById('adventureLog').textContent = logs[new Date().getDate()%logs.length];
+}
+
+function renderSettings(){
+  // API status
+  const apiSt = document.getElementById('apiStatus');
+  if(D.apiKey){
+    apiSt.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--success)">✅ API Key 已配置 · ${D.apiKey.slice(0,6)}...${D.apiKey.slice(-4)} <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="D.apiKey='';save();renderSettings();toast('API Key 已清除')">清除</button></div>`;
+  } else {
+    apiSt.innerHTML = '<p style="color:var(--text3);font-size:14px">未配置 · 使用本地模式</p>';
+  }
+
+  // Review mode
+  const modes = [
+    {key:'relaxed',label:'😌 佛系',desc:'每天≤3个复习'},
+    {key:'standard',label:'⚖️ 标准',desc:'SM-2 全量推送'},
+    {key:'hardcore',label:'😈 魔鬼',desc:'全量+关联概念'}
+  ];
+  document.getElementById('reviewModeSetting').innerHTML = modes.map(m=>`
+    <div class="skill-row" style="cursor:pointer;border-color:${D.settings.reviewMode===m.key?'var(--gold)':'var(--border)'}" onclick="D.settings.reviewMode='${m.key}';save();renderSettings()">
+      <div style="font-size:20px">${m.label[0]+m.label[1]}</div>
+      <div class="skill-info"><div class="skill-name">${m.label}</div><div class="skill-effect">${m.desc}</div></div>
+      ${D.settings.reviewMode===m.key?'<span style="color:var(--gold)">✓</span>':''}
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════
+// NAVIGATION & UTILS
+// ═══════════════════════════════════════
+document.querySelectorAll('.bottom-nav button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+btn.dataset.page).classList.add('active');
+    document.getElementById('fabBtn').style.display = btn.dataset.page==='plans'?'flex':'none';
+    if(btn.dataset.page==='plans') renderPlans();
+    if(btn.dataset.page==='adventure') renderAdventure();
+    if(btn.dataset.page==='settings') renderSettings();
+  });
+});
+
+document.querySelectorAll('.modal-overlay').forEach(o=>{ o.addEventListener('click',e=>{ if(e.target===o) o.style.display='none'; }); });
+
+function toast(msg){
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(()=>el.remove(), 2500);
+}
+
+// PWA Install
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferredPrompt=e; document.getElementById('installBanner').classList.add('show'); });
+function installApp(){
+  if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt.userChoice.then(r=>{ if(r.outcome==='accepted'){ document.getElementById('installBanner').classList.remove('show'); } deferredPrompt=null; }); }
+  else toast('📲 使用浏览器菜单中的"添加到主屏幕"');
+}
+
+// Init
+function init(){
+  load();
+  checkEnergyReset();
+  renderAll();
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('Notification' in window && Notification.permission==='default') Notification.requestPermission();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
