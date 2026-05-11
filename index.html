@@ -319,7 +319,8 @@ body{
 // ═══════════════ DATA LAYER ═══════════════
 const STORAGE_KEY = 'studybuddy_v3';
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
-const MODEL = 'deepseek-v4-pro';
+const MODEL = 'deepseek-v4-flash'; // Flash: fast & reliable for browser
+const MODEL_PRO = 'deepseek-v4-pro';  // Pro: deep reasoning, slower
 let D = { user:{ charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false,feynmanCount:0,exerciseCount:0,streakDays:0 }, plans:[], tasks:[], reviewItems:[], exerciseRecords:[], achievements:[], apiKey:'', settings:{ reviewMode:'standard',lang:'zh' }, resourceCache:{}, syllabusEdits:{}, tokenUsage:{total:0,count:0} };
 const ACHIEVEMENTS = [
   { key:'streak7',icon:'🗓',title:'坚持一周',desc:'连续7天活跃',reward:'解锁专属主题',cond:p=>p.user.streakDays>=7 },
@@ -458,8 +459,8 @@ async function deepseekCall(messages, opts={}){
     toast('⚠️ Key 应以 sk- 开头，请到 platform.deepseek.com 获取');
     return null;
   }
-  const { tools, maxTokens=1000, temperature=0.7 } = opts;
-  const body = { model:MODEL, messages, max_tokens:maxTokens, temperature };
+  const { tools, maxTokens=1000, temperature=0.7, usePro } = opts;
+  const body = { model: usePro?MODEL_PRO:MODEL, messages, max_tokens:maxTokens, temperature };
   if(tools) body.tools = tools;
 
   const headers = {'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey};
@@ -913,7 +914,7 @@ function renderWizS4(){
 function renderWizS5(){
   const ws = wizardState;
   return `<h2>🔍 S6：选择学习资料</h2>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 Pro 联网搜索中...':'📚 本地资源库匹配中...'}</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 联网搜索中...':'📚 本地资源库匹配中...'}</p>
     ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-outline btn-block" style="flex:1" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">🔍 展开搜索</button>
@@ -1086,7 +1087,7 @@ async function runPersonalizedGeneration(ws, res){
   let syllabus = null;
   let analysisText = '';
 
-  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:4000});
+  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:4000,usePro:true}); // Pro for deep reasoning
   if(resp){
     try{
       const content = resp.choices[0].message.content;
@@ -1859,7 +1860,7 @@ function renderSettings(){
     ${!isSk?`<p style="font-size:12px;color:var(--danger);margin-bottom:8px">Key 应以 sk- 开头。请到 <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--purple-light)">platform.deepseek.com</a> 获取</p>`:''}
     <div class="card" style="background:var(--purple-bg);border-color:var(--purple);margin-top:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px">🤖 DeepSeek V4 Pro</span>
+        <span style="font-size:13px">🤖 DeepSeek V4</span>
         <span class="tag tag-gold">CORS代理</span>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">${getTokenStats()}</div>
