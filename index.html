@@ -554,7 +554,7 @@ async function searchResources(topic, forceRefresh=false){
   console.log('[searchResources] Calling DeepSeek V4 Pro for:', topic);
   toast('🔍 DeepSeek V4 Pro 正在搜索...');
   const msgs = [
-    {role:'system',content:`你是学习资源推荐专家。搜索并推荐15-20个优质学习资源。对每个资源必须提供：
+    {role:'system',content:`你是学习资源推荐专家。搜索并推荐8-10个优质学习资源。对每个资源必须提供：
 1. name - 资源名称
 2. author - 作者/平台
 3. type - 类型（视频课程/书籍/在线教程/练习平台/文档）
@@ -580,10 +580,18 @@ async function searchResources(topic, forceRefresh=false){
         const json = JSON.parse(jsonMatch[0]);
         console.log('[searchResources] Parsed resources:', json.resources?.length||0);
         if(json.resources && json.resources.length>0){
-          D.resourceCache[cacheKey] = {data:json.resources, time:Date.now(), apiResult:true};
+          // Merge AI results with local resources to ensure 12-15 total
+          const localRes = getLocalResources(topic);
+          const merged = [...json.resources];
+          localRes.forEach(lr => {
+            if(!merged.some(m => (m.name||'').slice(0,4) === (lr.name||'').slice(0,4))) {
+              merged.push(lr);
+            }
+          });
+          D.resourceCache[cacheKey] = {data:merged, time:Date.now(), apiResult:true};
           save();
-          toast(`✅ AI 搜索完成！找到 ${json.resources.length} 个资源`);
-          return json.resources;
+          toast(`✅ AI搜索 ${json.resources.length} + 本地 ${merged.length-json.resources.length} = ${merged.length} 个资源`);
+          return merged;
         }
       }
       console.log('[searchResources] Failed to parse resources');
@@ -941,7 +949,7 @@ function wizResource(){
       <div style="font-weight:600;font-size:14px">${ws.searchResults[ws.selectedResource]?.name||''}</div>
       <p style="font-size:11px;color:var(--text3);margin-top:2px">${ws.searchResults[ws.selectedResource]?.author||''} · ${ws.searchResults[ws.selectedResource]?.type||''}</p>
     </div>`:''}
-    <p style="color:var(--text2);font-size:13px;margin-bottom:8px">${D.apiKey?'🤖 DeepSeek V4 实时搜索 · 最多20个结果':'📚 本地资源库 · 最多12个结果'}</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:8px">${D.apiKey?'🤖 AI 搜索 + 本地库合并 · 12-15个结果':'📚 本地资源库 · 12个结果'}</p>
     ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
     <button class="btn btn-gold btn-block" style="margin-bottom:8px;padding:14px;font-size:16px" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}',true)">🔍 打开搜索页面</button>
     <p style="text-align:center;font-size:12px;color:var(--text3)">点击上方按钮进入全屏搜索，可筛选排序，选择后返回</p>
