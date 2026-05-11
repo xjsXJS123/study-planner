@@ -226,10 +226,11 @@ body{
 <!-- Page: Plans List -->
 <div class="page active" id="page-plans">
   <div class="energy-bar" id="energyBar"></div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
     <h2 style="font-size:18px">📋 学习计划</h2>
     <span style="font-size:13px;color:var(--text2)" id="activeStatus"></span>
   </div>
+  <div class="card" style="padding:10px 16px;margin-bottom:12px;border-color:var(--purple)" id="todaySchedule"></div>
   <div id="planList"></div>
 </div>
 
@@ -845,7 +846,7 @@ function getDayTopics(name, phase, day, total){
 }
 
 // ═══════════════ PLAN WIZARD (7 STEPS) ═══════════════
-let wizardState = {step:0,topicName:'',totalDays:14,dailyMin:60,level:'beginner',focusTags:[],selectedResource:null,searchResults:[],isSearching:false};
+let wizardState = {step:0,topicName:'',totalDays:14,dailyMin:60,timeSlots:[{start:'19:00',end:'21:00'}],level:'beginner',focusTags:[],selectedResource:null,searchResults:[],isSearching:false};
 
 function openPlanWizard(){
   wizardState = {step:0,topicName:'',totalDays:14,dailyMin:60,level:'beginner',focusTags:[],selectedResource:null,searchResults:[],isSearching:false};
@@ -854,7 +855,7 @@ function openPlanWizard(){
 }
 
 function renderWizard(){
-  const totalSteps = 7;
+  const totalSteps = 8;
   document.getElementById('stepIndicator').innerHTML = Array.from({length:totalSteps},(_,i)=>{
     let cls='step-dot'; if(i===wizardState.step) cls+=' active'; if(i<wizardState.step) cls+=' done'; return `<div class="${cls}"></div>`;
   }).join('');
@@ -864,15 +865,16 @@ function renderWizard(){
     case 0: html = renderWizS0(); break;
     case 1: html = renderWizS1(); break;
     case 2: html = renderWizS2(); break;
-    case 3: html = renderWizS3(); break;
-    case 4: html = renderWizS4(); break;
-    case 5: html = renderWizS5(); break;
-    case 6: html = renderWizS6(); break;
+    case 3: html = renderWizS3_new(); break;
+    case 4: html = wizLevel(); break;
+    case 5: html = wizFocus(); break;
+    case 6: html = wizResource(); break;
+    case 7: html = wizConfirm(); break;
   }
 
   html += `<div class="modal-actions">
     ${wizardState.step>0?`<button class="btn btn-outline" onclick="wizardState.step--;renderWizard()">← 上一步</button>`:''}
-    <button class="btn btn-gold" onclick="wizardNext()">${wizardState.step===6?'🚀 开始学习':wizardState.step===5&&wizardState.isSearching?'搜索中...':'下一步 →'}</button>
+    <button class="btn btn-gold" onclick="wizardNext()">${wizardState.step===7?'🚀 开始学习':wizardState.step===6&&wizardState.isSearching?'搜索中...':'下一步 →'}</button>
   </div>`;
   document.getElementById('wizardContent').innerHTML = html;
   document.getElementById('wizardModalInner').scrollTop = 0;
@@ -900,22 +902,39 @@ function renderWizS2(){
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3)"><span>15</span><span>120</span></div>`;
 }
 
-function renderWizS3(){
-  const opts = [{v:'beginner',t:'🟢 零基础',d:'对这个领域完全陌生'},{v:'intermediate',t:'🟡 有一定基础',d:'学过一些但不成体系'},{v:'advanced',t:'🔴 进阶',d:'已有基础，想深入提升'}];
-  return `<h2>🎯 S4：当前水平？</h2>${opts.map(o=>`<div class="card" style="cursor:pointer;border-color:${wizardState.level===o.v?'var(--gold)':'var(--border)'}" onclick="wizardState.level='${o.v}';renderWizard()"><h3>${o.t}</h3><p style="font-size:13px;color:var(--text2)">${o.d}</p></div>`).join('')}`;
+function renderWizS3_new(){
+  const ws = wizardState;
+  const slots = ws.timeSlots||[{start:'19:00',end:'21:00'}];
+  return `<h2>⏰ S4：学习时段</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">设置你习惯的学习时间，App 会准时提醒你</p>
+    <div id="timeSlotEditor">${slots.map((s,i)=>`
+      <div class="skill-row" style="align-items:center">
+        <span style="font-size:13px;color:var(--text2);min-width:20px">${i+1}.</span>
+        <input class="input" type="time" value="${s.start}" onchange="wizardState.timeSlots[${i}].start=this.value" style="flex:1;min-width:90px">
+        <span style="color:var(--text3)">→</span>
+        <input class="input" type="time" value="${s.end}" onchange="wizardState.timeSlots[${i}].end=this.value" style="flex:1;min-width:90px">
+        ${slots.length>1?`<button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="wizardState.timeSlots.splice(${i},1);renderWizard()">✕</button>`:''}
+      </div>`).join('')}</div>
+    <button class="btn btn-outline btn-block" style="margin-top:8px" onclick="wizardState.timeSlots.push({start:'19:00',end:'21:00'});renderWizard()">+ 添加时段</button>
+    <p style="font-size:11px;color:var(--text3);margin-top:8px">可添加多个时段，App 会在每个时段开始前提醒你</p>`;
 }
 
-function renderWizS4(){
+function wizLevel(){
+  const opts = [{v:'beginner',t:'🟢 零基础',d:'对这个领域完全陌生'},{v:'intermediate',t:'🟡 有一定基础',d:'学过一些但不成体系'},{v:'advanced',t:'🔴 进阶',d:'已有基础，想深入提升'}];
+  return `<h2>🎯 S5：当前水平？</h2>${opts.map(o=>`<div class="card" style="cursor:pointer;border-color:${wizardState.level===o.v?'var(--gold)':'var(--border)'}" onclick="wizardState.level='${o.v}';renderWizard()"><h3>${o.t}</h3><p style="font-size:13px;color:var(--text2)">${o.d}</p></div>`).join('')}`;
+}
+
+function wizFocus(){
   const tags = ['掌握理论','动手实践','通过考试','兴趣拓展'];
   const focus = wizardState.focusTags;
-  return `<h2>🎯 S5：学习侧重？（多选）</h2>
+  return `<h2>🎯 S6：学习侧重？（多选）</h2>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">${tags.map(t=>`<span class="tag ${focus.includes(t)?'tag-gold':'tag-purple'}" style="cursor:pointer;font-size:14px;padding:8px 16px" onclick="const i=wizardState.focusTags.indexOf('${t}');if(i>=0)wizardState.focusTags.splice(i,1);else wizardState.focusTags.push('${t}');renderWizard()">${t}</span>`).join('')}</div>
     <p style="font-size:12px;color:var(--text3)">可以跳过，默认综合学习</p>`;
 }
 
-function renderWizS5(){
+function wizResource(){
   const ws = wizardState;
-  return `<h2>🔍 S6：选择学习资料</h2>
+  return `<h2>🔍 S7：选择学习资料</h2>
     <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 联网搜索中...':'📚 本地资源库匹配中...'}</p>
     ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
     <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -945,10 +964,10 @@ function renderWizS5(){
     <div class="form-group" style="margin-top:12px"><label class="label">或自定义资源</label><div style="display:flex;gap:8px"><input class="input" id="customResInput" placeholder="输入资源名称或网址"><button class="btn btn-sm btn-outline" onclick="addCustomResource()">添加</button></div></div>`;
 }
 
-function renderWizS6(){
+function wizConfirm(){
   const levelName = {beginner:'零基础',intermediate:'有一定基础',advanced:'进阶'};
   const res = wizardState.searchResults[wizardState.selectedResource];
-  return `<h2>✅ S7：确认计划</h2>
+  return `<h2>✅ S8：确认计划</h2>
     <div class="card"><table style="width:100%;font-size:14px">
       <tr><td style="color:var(--text2);padding:4px 0">主题</td><td style="font-weight:600">${wizardState.topicName||'(未填写)'}</td></tr>
       <tr><td style="color:var(--text2);padding:4px 0">天数</td><td style="font-weight:600">${wizardState.totalDays} 天</td></tr>
@@ -965,8 +984,8 @@ async function wizardNext(){
 
   if(s===0 && !ws.topicName.trim()){ toast('请输入学习主题'); return; }
 
-  // Step 5 → search resources
-  if(s===5){
+  // Step 6 (resource) → search
+  if(s===6){
     if(ws.searchResults.length===0 && ws.topicName.trim()){
       ws.isSearching = true; renderWizard();
       const results = await searchResources(ws.topicName);
@@ -976,11 +995,11 @@ async function wizardNext(){
     if(ws.searchResults.length===0){ toast('请等待搜索完成或自定义资源'); return; }
   }
 
-  if(s===6){ createPlan(); return; }
+  if(s===7){ createPlan(); return; }
 
-  // Step 4→5: trigger search when moving to resource step
-  if(s===4 && ws.topicName.trim() && ws.searchResults.length===0){
-    ws.step = 5; ws.isSearching = true; renderWizard();
+  // Step 5→6: trigger search when moving to resource step
+  if(s===5 && ws.topicName.trim() && ws.searchResults.length===0){
+    ws.step = 6; ws.isSearching = true; renderWizard();
     const results = await searchResources(ws.topicName);
     ws.searchResults = results; ws.isSearching = false; renderWizard();
     return;
@@ -1000,6 +1019,30 @@ function addCustomResource(){
   toast('✅ 自定义资源已添加');
 }
 
+function scheduleReminders(plan){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const slots = wizardState.timeSlots || [{start:'19:00',end:'21:00'}];
+  const now = new Date();
+  slots.forEach(slot => {
+    const [h,m] = (slot.start||'19:00').split(':').map(Number);
+    const remindTime = new Date();
+    remindTime.setHours(h, m-5, 0, 0); // 5 min before
+    const delay = remindTime.getTime() - now.getTime();
+    if(delay > 0 && delay < 86400000){
+      setTimeout(() => {
+        new Notification('📚 学伴提醒', {
+          body: `「${plan.topicName}」学习时间到了！今天有 ${D.tasks.filter(t=>t.planId===plan.id&&t.date===today()&&!t.completed).length} 个任务等你完成`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%234F46E5" width="100" height="100" rx="20"/><text x="50" y="68" text-anchor="middle" fill="white" font-size="56">📚</text></svg>',
+          tag: 'study-'+plan.id,
+          requireInteraction: true
+        });
+      }, delay);
+    }
+  });
+  // Save slots to plan
+  plan.timeSlots = JSON.parse(JSON.stringify(slots));
+}
+
 function createPlan(){
   const ws = wizardState;
   if(!ws.topicName.trim()){ toast('请输入学习主题'); return; }
@@ -1012,11 +1055,13 @@ function createPlan(){
       id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
       level: ws.level, focusTags: ws.focusTags.join(','),
       selectedResource: res?JSON.stringify(res):'',
+      timeSlots: JSON.parse(JSON.stringify(ws.timeSlots||[{start:'19:00',end:'21:00'}])),
       resourceAnalysis: '', syllabus: '[]', isPersonalized: true,
       status:'generating', createdAt: today(), syllabusEdits: {}
     };
     D.plans.unshift(placeholderPlan);
     D.syllabusEdits[placeholderPlan.id] = {};
+    scheduleReminders(placeholderPlan);
     save();
     renderAll();
 
@@ -1110,12 +1155,14 @@ function createPlanGeneric(ws, res){
     id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
     level: ws.level, focusTags: ws.focusTags.join(','),
     selectedResource: res?JSON.stringify(res):'',
+    timeSlots: JSON.parse(JSON.stringify(ws.timeSlots||[{start:'19:00',end:'21:00'}])),
     resourceAnalysis: '',
     syllabus: JSON.stringify(syllabus),
     isPersonalized: false,
     status:'active', createdAt: today(), syllabusEdits: {}
   };
   D.plans.push(plan);
+  scheduleReminders(plan);
   syllabus.forEach(day => {
     day.tasks.forEach(task => {
       D.tasks.push({
@@ -1721,6 +1768,23 @@ function updateEnergyBars(){
 
 function renderPlans(){
   document.getElementById('activeStatus').textContent = getActiveStatus(); updateEnergyBars();
+
+  // Show today's schedule from all plans
+  const allSlots = [];
+  D.plans.forEach(p => {
+    (p.timeSlots||[]).forEach(s => { allSlots.push({plan:p.topicName, start:s.start, end:s.end}); });
+  });
+  if(allSlots.length===0 && wizardState.timeSlots){
+    allSlots.push({plan:'新计划', start:'19:00', end:'21:00'});
+  }
+  const schEl = document.getElementById('todaySchedule');
+  if(allSlots.length>0){
+    schEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">⏰</span><div style="flex:1"><span style="font-size:13px;font-weight:600;color:var(--purple-light)">今日学习时段</span><div style="font-size:12px;color:var(--text2);margin-top:2px">${allSlots.map(s=>`<span style="margin-right:12px">${s.plan}: ${s.start}-${s.end}</span>`).join('')}</div></div></div>`;
+    schEl.style.display = 'block';
+  } else {
+    schEl.style.display = 'none';
+  }
+
   const container = document.getElementById('planList');
   if(D.plans.length===0){
     container.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>还没有学习计划<br>点击右下角 + 开始</p></div>'; return;
