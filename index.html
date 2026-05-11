@@ -174,6 +174,16 @@ body{
 /* Resource search loading */
 .search-loading{text-align:center;padding:30px}
 .search-loading .spin{font-size:40px;animation:popIn 1s infinite}
+/* Global progress bar */
+.global-progress{position:fixed;top:0;left:0;right:0;z-index:400;background:var(--card-bg);border-bottom:1px solid var(--border);padding:10px 16px;display:none;animation:slideDown .25s ease}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.global-progress .gp-bar{height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;margin-top:6px}
+.global-progress .gp-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--gold));border-radius:2px;width:0%;transition:width .5s ease}
+.global-progress .gp-text{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.global-progress .gp-cancel{color:var(--danger);cursor:pointer;font-size:12px}
+/* Generating state card */
+.plan-card.generating{opacity:.6;pointer-events:none;position:relative}
+.plan-card.generating::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 25%,rgba(255,255,255,0.02) 50%,transparent 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
 </style>
 </head>
 <body>
@@ -287,6 +297,12 @@ body{
 <!-- Modal: Resource Search -->
 <div class="modal-overlay" id="resourceSearchModal" style="display:none"><div class="modal" id="resourceSearchInner" style="max-height:90vh"></div></div>
 
+<!-- Global Progress Bar -->
+<div class="global-progress" id="globalProgress">
+  <div class="gp-text"><span id="gpTitle">🤖 AI 处理中...</span><span class="gp-cancel" id="gpCancel" onclick="cancelBgTask()" style="display:none">取消</span></div>
+  <div class="gp-bar"><div class="gp-fill" id="gpFill" style="width:20%"></div></div>
+  <div style="font-size:11px;color:var(--text3);margin-top:4px" id="gpSub"></div>
+</div>
 <!-- Toast -->
 <div id="toastContainer"></div>
 
@@ -325,6 +341,106 @@ function migrate(){
   D.exerciseRecords = D.exerciseRecords || []; D.achievements = D.achievements || [];
   D.apiKey = D.apiKey || ''; D.settings = D.settings || { reviewMode:'standard',lang:'zh' };
   D.resourceCache = D.resourceCache || {}; D.syllabusEdits = D.syllabusEdits || {};
+  D.bgTasks = D.bgTasks || [];
+}
+
+/* ═══════════ BACKGROUND TASK MANAGER ═══════════ */
+const BgTaskManager = {
+  queue: [],
+  currentTask: null,
+  isRunning: false,
+
+  add(task){
+    task.id = uid(); task.status='queued'; task.createdAt=Date.now();
+    this.queue.push(task); D.bgTasks = this.queue.map(t=>({id:t.id,planId:t.planId,status:t.status,type:t.type})); save();
+    if(!this.isRunning) this.processNext();
+    return task.id;
+  },
+
+  async processNext(){
+    if(this.isRunning || this.queue.length===0) return;
+    this.isRunning = true;
+    this.currentTask = this.queue.shift();
+    this.currentTask.status = 'running';
+    showGlobalProgress(this.currentTask);
+    try{
+      await this.currentTask.execute(this.currentTask);
+      this.currentTask.status = 'completed';
+      if(this.currentTask.onComplete) this.currentTask.onComplete();
+      if('Notification' in window && Notification.permission==='granted'){
+        new Notification('学伴',{body:this.currentTask.doneMsg||'任务已完成',icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%234F46E5" width="100" height="100" rx="20"/><text x="50" y="68" text-anchor="middle" fill="white" font-size="56">📚</text></svg>'});
+      }
+    }catch(e){
+      this.currentTask.status = 'failed';
+      toast('⚠️ '+((this.currentTask.failMsg||'任务失败')+'，已切换本地模式'));
+      if(this.currentTask.onFail) this.currentTask.onFail();
+    }
+    hideGlobalProgress();
+    this.isRunning = false; this.currentTask = null;
+    renderAll();
+    setTimeout(()=>this.processNext(),300);
+  },
+
+  cancel(taskId){
+    const idx = this.queue.findIndex(t=>t.id===taskId);
+    if(idx>=0){ this.queue.splice(idx,1); return true; }
+    if(this.currentTask&&this.currentTask.id===taskId){
+      this.currentTask.status='cancelled';
+      hideGlobalProgress();
+      this.isRunning=false; this.currentTask=null;
+      if(this.queue.length>0) this.processNext();
+      return true;
+    }
+    return false;
+  }
+};
+
+let currentBgTaskId = null;
+
+function showGlobalProgress(task){
+  currentBgTaskId = task.id;
+  const gp = document.getElementById('globalProgress');
+  gp.style.display = 'block';
+  document.getElementById('gpTitle').textContent = task.title||'🤖 AI 处理中...';
+  document.getElementById('gpSub').textContent = task.subtitle||'';
+  document.getElementById('gpFill').style.width = '20%';
+  document.getElementById('gpCancel').style.display = task.canCancel!==false?'inline':'none';
+
+  // Simulate progress steps
+  const steps = task.progressSteps||['准备中...','处理中...','即将完成...'];
+  let step = 0;
+  const totalSteps = steps.length;
+  const interval = setInterval(()=>{
+    if(currentBgTaskId !== task.id){ clearInterval(interval); return; }
+    step++;
+    if(step < totalSteps){
+      document.getElementById('gpSub').textContent = steps[step];
+      document.getElementById('gpFill').style.width = (20+(step/totalSteps)*70)+'%';
+    }
+    if(BgTaskManager.currentTask?.status==='completed'||BgTaskManager.currentTask?.status==='failed'){
+      document.getElementById('gpFill').style.width='95%';
+      clearInterval(interval);
+    }
+  }, 2000);
+  task._progressInterval = interval;
+}
+
+function hideGlobalProgress(){
+  const gp = document.getElementById('globalProgress');
+  document.getElementById('gpFill').style.width='100%';
+  if(currentBgTaskId){
+    const task = BgTaskManager.currentTask;
+    if(task&&task._progressInterval) clearInterval(task._progressInterval);
+  }
+  setTimeout(()=>{ gp.style.display='none'; document.getElementById('gpFill').style.width='20%'; }, 500);
+  currentBgTaskId = null;
+}
+
+function cancelBgTask(){
+  if(currentBgTaskId){
+    BgTaskManager.cancel(currentBgTaskId);
+    toast('已取消');
+  }
 }
 
 // ═══════════════ DEEPSEEK API ═══════════════
@@ -397,9 +513,48 @@ async function searchResources(topic){
 
 function getLocalResources(topic){
   const lib = {
-    '高等数学':[{name:'高等数学（同济第七版）',author:'同济大学数学系',type:'书籍',url:'https://book.douban.com/subject/26944646/',description:'国内最经典的高数教材，考研标配',pros:['体系完整严谨','例题丰富','考研指定教材'],cons:['偏理论，不够直观','自学难度较大'],matchScore:95},{name:'宋浩老师《高等数学》',author:'B站 宋浩',type:'视频课程',url:'https://search.bilibili.com/all?keyword=宋浩+高等数学',description:'B站播放量最高的高数课，讲解风趣幽默',pros:['零基础友好','讲解清晰风趣','完全免费'],cons:['课时较多(100+)','深度不如教材'],matchScore:92},{name:'MIT 18.01 微积分',author:'MIT OpenCourseWare',type:'在线教程',url:'https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/',description:'麻省理工经典微积分公开课，英文授课',pros:['世界顶级名校课程','配套习题完善'],cons:['全英文授课','需要科学上网'],matchScore:85}],
-    '英语口语':[{name:'老友记学英语',author:'Friends/NBC',type:'视频课程',url:'https://www.bilibili.com/video/BV1s4411C7sK/',description:'通过经典美剧学地道口语表达',pros:['内容生动有趣','地道美式表达','免费资源多'],cons:['90年代用语部分过时','需自己整理笔记'],matchScore:90},{name:'BBC Learning English',author:'BBC',type:'在线教程',url:'https://www.bbc.co.uk/learningenglish/',description:'BBC官方英语学习平台，英式发音',pros:['官方出品权威','每日更新','完全免费'],cons:['英式发音非主流','语速较快'],matchScore:87},{name:'英语流利说',author:'流利说',type:'练习平台',url:'https://www.liulishuo.com/',description:'AI口语评分+跟读练习',pros:['AI实时反馈发音','游戏化激励'],cons:['免费内容有限','需付费解锁全部'],matchScore:85}],
-    'Python入门':[{name:'Python官方教程',author:'Python Software Foundation',type:'在线教程',url:'https://docs.python.org/zh-cn/3/tutorial/',description:'Python官方中文教程，最权威的入门指南',pros:['官方出品最权威','中文翻译完整','持续更新'],cons:['风格偏技术文档','缺少视频演示'],matchScore:93},{name:'廖雪峰Python教程',author:'廖雪峰',type:'在线教程',url:'https://www.liaoxuefeng.com/wiki/1016959663602400',description:'中文圈最知名的Python入门教程',pros:['中文通俗易懂','示例代码丰富','配套练习'],cons:['部分内容过时','进阶内容偏少'],matchScore:95},{name:'Python for Everybody',author:'Coursera/University of Michigan',type:'视频课程',url:'https://www.coursera.org/specializations/python',description:'全球最受欢迎的Python入门课，中文字幕',pros:['零基础友好','中文字幕','证书认可'],cons:['免费版无作业批改','进度较慢'],matchScore:91}],
+    '高等数学':[
+      {name:'高等数学（同济第七版）',author:'同济大学数学系',type:'书籍',url:'https://book.douban.com/subject/26944646/',description:'国内最经典的高数教材，考研指定用书',pros:['体系完整严谨','例题丰富','考研指定教材'],cons:['偏理论，不够直观','自学难度较大'],matchScore:95},
+      {name:'宋浩老师《高等数学》',author:'B站 宋浩',type:'视频课程',url:'https://search.bilibili.com/all?keyword=宋浩+高等数学',description:'B站播放量最高的高数课，讲解风趣',pros:['零基础友好','讲解清晰风趣','完全免费'],cons:['课时较多(100+)','深度不如教材'],matchScore:92},
+      {name:'MIT 18.01 微积分',author:'MIT OCW',type:'在线教程',url:'https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/',description:'麻省理工经典微积分公开课',pros:['世界顶级名校课程','配套习题完善'],cons:['全英文授课','需科学上网'],matchScore:85},
+      {name:'普林斯顿微积分读本',author:'Adrian Banner',type:'书籍',url:'',description:'直观易懂的微积分入门书，适合自学',pros:['通俗易懂','大量图例','适合自学'],cons:['深度不如同济','偏直觉少严格证明'],matchScore:88},
+      {name:'3Blue1Brown 微积分本质',author:'3Blue1Brown',type:'视频课程',url:'https://www.bilibili.com/video/BV1qW411N7FU/',description:'用动画直观展示微积分核心概念',pros:['动画直观','培养数学直觉','免费'],cons:['不涉及计算技巧','需配合教材使用'],matchScore:90},
+      {name:'张宇考研数学',author:'张宇',type:'视频课程',url:'',description:'考研数学名师，讲解深入浅出',pros:['考研导向','真题丰富','讲解生动'],cons:['偏应试','基础部分略快'],matchScore:87},
+      {name:'Khan Academy Calculus',author:'Khan Academy',type:'在线教程',url:'https://www.khanacademy.org/math/calculus-1',description:'可汗学院微积分，全球最大免费学习平台',pros:['完全免费','交互式练习','进度追踪'],cons:['英文为主','中文字幕不全'],matchScore:84},
+      {name:'高等数学习题全解',author:'同济大学',type:'练习平台',url:'',description:'配套同济教材的习题详解',pros:['配套教材','每道题有详解'],cons:['部分解答简略','需配合教材'],matchScore:82},
+      {name:'数学分析（华东师大）',author:'华东师范大学',type:'书籍',url:'',description:'数学系教材，比高数更深入严谨',pros:['理论严谨','证明完整'],cons:['难度较高','不适合速成'],matchScore:78},
+      {name:'武忠祥每日一题',author:'武忠祥',type:'视频课程',url:'https://space.bilibili.com/446839749',description:'每日一道高数题，积少成多',pros:['日积月累','真题精讲'],cons:['不成体系','需一定基础'],matchScore:80},
+      {name:'李永乐复习全书',author:'李永乐',type:'书籍',url:'',description:'考研数学经典复习资料',pros:['考点全覆盖','难度适中'],cons:['偏重考研','不适合初学者'],matchScore:86},
+      {name:'Calculus by Strang',author:'Gilbert Strang',type:'在线教程',url:'https://ocw.mit.edu/courses/res-18-001-calculus-online-textbook-spring-2005/',description:'MIT著名教授Strang的微积分教材',pros:['大师出品','免费在线','应用导向'],cons:['全英文','理论较浅'],matchScore:83},
+    ],
+    '英语口语':[
+      {name:'老友记学口语',author:'Friends/NBC',type:'视频课程',url:'https://www.bilibili.com/video/BV1s4411C7sK/',description:'经典美剧学地道口语表达',pros:['生动有趣','地道美式表达','免费'],cons:['90年代用语','需自己整理'],matchScore:90},
+      {name:'BBC Learning English',author:'BBC',type:'在线教程',url:'https://www.bbc.co.uk/learningenglish/',description:'BBC官方英语学习平台',pros:['官方权威','每日更新','完全免费'],cons:['英式发音','语速较快'],matchScore:87},
+      {name:'英语流利说',author:'流利说',type:'练习平台',url:'https://www.liulishuo.com/',description:'AI口语评分+跟读练习App',pros:['AI实时反馈','游戏化激励'],cons:['免费内容有限','需付费解锁'],matchScore:85},
+      {name:'VOA慢速英语',author:'Voice of America',type:'在线教程',url:'https://learningenglish.voanews.com/',description:'美式慢速英语新闻，适合听力入门',pros:['语速慢清晰','新闻内容实用','免费'],cons:['内容偏新闻','较正式'],matchScore:84},
+      {name:'TED Talks',author:'TED',type:'视频课程',url:'https://www.ted.com/talks',description:'全球精英演讲，练听力学知识',pros:['内容优质','中文字幕','免费'],cons:['语速快','不适合零基础'],matchScore:82},
+      {name:'英语趣配音',author:'英语趣配音',type:'练习平台',url:'https://www.qupeiyin.com/',description:'给电影片段配音练口语',pros:['趣味性强','模仿母语者'],cons:['部分功能收费','需自己录音'],matchScore:81},
+      {name:'Cambly',author:'Cambly',type:'练习平台',url:'https://www.cambly.com/',description:'与外教一对一视频练口语',pros:['真实对话','即时纠正'],cons:['价格较高','时差问题'],matchScore:79},
+      {name:'英语音标大师',author:'赖世雄',type:'视频课程',url:'',description:'赖世雄美语音标，从发音开始纠正',pros:['发音基础扎实','循序渐进'],cons:['进度较慢','内容较老'],matchScore:83},
+      {name:'墨墨背单词',author:'墨墨',type:'练习平台',url:'',description:'基于遗忘曲线的背单词App',pros:['记忆曲线科学','词库丰富'],cons:['仅背单词','不练口语'],matchScore:77},
+      {name:'DailyDictation',author:'dailydictation.com',type:'在线教程',url:'https://dailydictation.com/',description:'每日听写练习，提升听力+拼写',pros:['每日练习','难度分级','免费'],cons:['偏听写','不直接练口语'],matchScore:80},
+      {name:'美剧学英语（Modern Family）',author:'ABC',type:'视频课程',url:'',description:'摩登家庭，现代美式口语最佳素材',pros:['现代用语','场景丰富'],cons:['语速正常偏快','需基础'],matchScore:88},
+      {name:'开言英语',author:'开言',type:'练习平台',url:'',description:'成人英语口语训练App',pros:['场景实用','北美外教'],cons:['价格不低','需坚持'],matchScore:82},
+    ],
+    'Python入门':[
+      {name:'Python官方教程',author:'Python Software Foundation',type:'在线教程',url:'https://docs.python.org/zh-cn/3/tutorial/',description:'Python官方中文教程',pros:['官方权威','中文完整','持续更新'],cons:['风格偏技术文档','缺少视频'],matchScore:93},
+      {name:'廖雪峰Python教程',author:'廖雪峰',type:'在线教程',url:'https://www.liaoxuefeng.com/wiki/1016959663602400',description:'中文圈最知名Python入门',pros:['中文通俗','示例丰富','配套练习'],cons:['部分过时','进阶偏少'],matchScore:95},
+      {name:'Python for Everybody',author:'Coursera/UMich',type:'视频课程',url:'https://www.coursera.org/specializations/python',description:'全球最受欢迎Python入门课',pros:['零基础友好','中文字幕'],cons:['免费版无批改','进度慢'],matchScore:91},
+      {name:'菜鸟教程 Python',author:'runoob.com',type:'在线教程',url:'https://www.runoob.com/python3/',description:'轻量级Python快速入门',pros:['快速上手','示例简洁','完全免费'],cons:['深度不足','缺少项目'],matchScore:88},
+      {name:'CS50 Python',author:'Harvard',type:'视频课程',url:'https://cs50.harvard.edu/python/',description:'哈佛大学Python入门课',pros:['名校课程','项目驱动','免费'],cons:['全英文','节奏快'],matchScore:89},
+      {name:'Python编程从入门到实践',author:'Eric Matthes',type:'书籍',url:'',description:'项目驱动的Python入门书',pros:['项目实战','循序渐进'],cons:['内容较基础','需动手'],matchScore:92},
+      {name:'B站 Python入门合集',author:'黑马程序员',type:'视频课程',url:'https://www.bilibili.com/video/BV1qW4y1a7fU/',description:'600集Python从入门到就业',pros:['内容全面','免费','中文'],cons:['集数太多','需筛选'],matchScore:86},
+      {name:'LeetCode Python',author:'LeetCode',type:'练习平台',url:'https://leetcode.cn/',description:'用Python刷算法题',pros:['实战练习','面试准备'],cons:['偏算法','入门门槛'],matchScore:80},
+      {name:'Kaggle Learn Python',author:'Kaggle/Google',type:'在线教程',url:'https://www.kaggle.com/learn/python',description:'数据科学向Python入门',pros:['交互式编程','免费'],cons:['偏数据科学'],matchScore:84},
+      {name:'Python Crash Course中文版',author:'社区翻译',type:'书籍',url:'',description:'经典入门书的中文版本',pros:['中文翻译质量高','结构清晰'],cons:['翻译可能滞后于原版'],matchScore:87},
+      {name:'北京理工大学Python慕课',author:'北理工',type:'视频课程',url:'https://www.icourse163.org/course/BIT-268001',description:'中国大学MOOC Python课程',pros:['大学课程体系','中文','免费'],cons:['节奏较慢','需跟进度'],matchScore:85},
+      {name:'Real Python',author:'realpython.com',type:'在线教程',url:'https://realpython.com/',description:'高质量Python教程网站',pros:['教程质量高','持续更新'],cons:['部分内容付费','英文'],matchScore:83},
+    ],
   };
   const lower = topic.toLowerCase();
   for(const [k,v] of Object.entries(lib)){
@@ -764,36 +919,63 @@ function createPlan(){
   document.getElementById('wizardModal').style.display = 'none';
 
   if(D.apiKey && res){
-    // Show loading and generate personalized plan
-    planLoadingId = uid();
-    const loadingHtml = `<div class="card" id="planLoading_${planLoadingId}" style="text-align:center;padding:30px">
-      <div style="font-size:48px;animation:popIn 1s infinite">🧠</div>
-      <h3 style="color:var(--gold);margin:12px 0">DeepSeek V4 Pro 分析中...</h3>
-      <p style="color:var(--text2);font-size:13px" id="planLoadingText">正在分析「${res.name}」的课程结构</p>
-      <p style="color:var(--text3);font-size:11px;margin-top:4px">根据你的每日${ws.dailyMin}分钟个性化定制</p>
-    </div>`;
-    const planList = document.getElementById('planList');
-    planList.insertAdjacentHTML('afterbegin', loadingHtml);
-    generatePersonalizedPlan(ws, res);
+    // Create placeholder plan with generating status
+    const placeholderPlan = {
+      id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
+      level: ws.level, focusTags: ws.focusTags.join(','),
+      selectedResource: res?JSON.stringify(res):'',
+      resourceAnalysis: '', syllabus: '[]', isPersonalized: true,
+      status:'generating', createdAt: today(), syllabusEdits: {}
+    };
+    D.plans.unshift(placeholderPlan);
+    D.syllabusEdits[placeholderPlan.id] = {};
+    save();
+    renderAll();
+
+    // Queue background task
+    BgTaskManager.add({
+      type:'generate_plan',
+      planId: placeholderPlan.id,
+      title:'🧠 DeepSeek V4 Pro 正在编排课程...',
+      subtitle:'正在搜索「'+res.name+'」的课程结构',
+      progressSteps:['搜索课程目录...','分析章节结构...','根据每日'+ws.dailyMin+'分钟拆分学习量...','正在生成个性化大纲...'],
+      doneMsg:'「'+ws.topicName+'」的学习计划已生成完毕',
+      failMsg:'大纲生成失败',
+      canCancel: true,
+      async execute(task){
+        const result = await runPersonalizedGeneration(ws, res);
+        if(!result){ throw new Error('Generation failed'); }
+        // Update the placeholder plan
+        const plan = D.plans.find(p=>p.id===task.planId);
+        if(plan){
+          plan.syllabus = JSON.stringify(result.syllabus);
+          plan.resourceAnalysis = result.analysisText;
+          plan.status = 'active';
+          // Create tasks
+          const reviewQueue = [];
+          result.syllabus.forEach((day,i)=>{
+            const date = addDays(today(),i);
+            const dayNum = i+1;
+            const tasks=[];
+            tasks.push({id:uid(),planId:plan.id,planName:ws.topicName,date,dayNum,type:'new_content',title:`${ws.topicName} · ${day.title||'第'+dayNum+'天'}`,desc:`学习${day.resourceRef||'指定内容'}（约${day.estMinutes||ws.dailyMin}分钟）`,estMin:day.estMinutes||Math.round(ws.dailyMin*0.6),concepts:day.concepts||[],resRef:day.resourceRef||''});
+            [1,3,7,14].forEach(iv=>reviewQueue.push({day:dayNum,topic:day.title,reviewDay:dayNum+iv}));
+            tasks.push({id:uid(),planId:plan.id,planName:ws.topicName,date,dayNum,type:'active_recall',title:'🧠 闭卷回忆',desc:'不看资料，闭卷回忆前一天要点（15分钟）',estMin:15,concepts:[],resRef:''});
+            if(dayNum%3===0) tasks.push({id:uid(),planId:plan.id,planName:ws.topicName,date,dayNum,type:'feynman',title:'🗣 费曼输出',desc:'用自己的话讲解已学概念（20分钟）',estMin:20,concepts:day.concepts||[],resRef:''});
+            reviewQueue.filter(r=>r.reviewDay===dayNum).forEach(r=>{tasks.push({id:uid(),planId:plan.id,planName:ws.topicName,date,dayNum,type:'spaced_review',title:`🔄 间隔复习·${r.topic}`,desc:'艾宾浩斯遗忘曲线节点复习（25分钟）',estMin:25,concepts:[],resRef:''});});
+            tasks.forEach(t=>D.tasks.push(t));
+          });
+          save();
+        }
+      },
+      onComplete(){ toast('✅ 「'+ws.topicName+'」AI 个性化大纲已生成！'); renderAll(); },
+      onFail(){ createPlanGeneric(ws, res); }
+    });
   } else {
-    // Use generic generator
     createPlanGeneric(ws, res);
   }
 }
 
-let planLoadingId = null;
-
-async function generatePersonalizedPlan(ws, res){
-  const loadingText = document.getElementById('planLoadingText');
-  const steps = [
-    '正在搜索「'+res.name+'」的完整课程目录...',
-    '分析章节结构，匹配学习路径...',
-    '根据每日'+ws.dailyMin+'分钟拆分学习量...',
-    '正在生成个性化大纲...'
-  ];
-  let stepIdx = 0;
-  const stepInterval = setInterval(()=>{ if(loadingText&&stepIdx<steps.length){ loadingText.textContent=steps[stepIdx]; stepIdx++; } }, 1500);
-
+async function runPersonalizedGeneration(ws, res){
   const msgs = [
     {role:'system',content:`你是课程规划专家。根据用户选择的学习资源，分析其真实章节结构，生成个性化每日学习计划。
 
@@ -820,108 +1002,17 @@ async function generatePersonalizedPlan(ws, res){
   let analysisText = '';
 
   const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:4000});
-  clearInterval(stepInterval);
-
   if(resp){
     try{
       const content = resp.choices[0].message.content;
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       const json = JSON.parse(jsonMatch ? jsonMatch[0] : content);
       if(json.syllabus && json.syllabus.length>0){
-        syllabus = json.syllabus;
-        analysisText = json.resourceStructure || '';
+        return {syllabus:json.syllabus, analysisText:json.resourceStructure||''};
       }
     }catch(e){ console.log('Parse error:',e); }
   }
-
-  // Remove loading
-  const loadingEl = document.getElementById('planLoading_'+planLoadingId);
-  if(loadingEl) loadingEl.remove();
-
-  if(!syllabus){
-    toast('⚠️ AI分析超时，使用通用大纲');
-    createPlanGeneric(ws, res);
-    return;
-  }
-
-  // Create plan with personalized syllabus
-  savePersonalizedPlan(ws, res, syllabus, analysisText);
-}
-
-function savePersonalizedPlan(ws, res, syllabus, analysisText){
-  const plan = {
-    id: uid(), topicName: ws.topicName, totalDays: ws.totalDays, dailyMin: ws.dailyMin,
-    level: ws.level, focusTags: ws.focusTags.join(','),
-    selectedResource: res?JSON.stringify(res):'',
-    resourceAnalysis: analysisText,
-    syllabus: JSON.stringify(syllabus),
-    isPersonalized: true,
-    status:'active', createdAt: today(), syllabusEdits: {}
-  };
-  D.plans.push(plan);
-
-  // Create tasks from personalized syllabus
-  const reviewQueue = [];
-  syllabus.forEach((day, i) => {
-    const date = addDays(today(), i);
-    const dayNum = i + 1;
-    const tasks = [];
-
-    // Main learning task with resource reference
-    tasks.push({
-      id: uid(), planId: plan.id, planName: ws.topicName,
-      date, dayNum,
-      type: 'new_content',
-      title: `${ws.topicName} · ${day.title||'第'+dayNum+'天'}`,
-      desc: `学习${day.resourceRef||'指定内容'}（约${day.estMinutes||ws.dailyMin}分钟）`,
-      estMin: day.estMinutes || Math.round(ws.dailyMin*0.6),
-      concepts: day.concepts || [],
-      resRef: day.resourceRef || ''
-    });
-
-    // Schedule reviews
-    [1,3,7,14].forEach(iv => {
-      reviewQueue.push({day:dayNum, topic:day.title, reviewDay:dayNum+iv});
-    });
-
-    // Active recall
-    tasks.push({
-      id: uid(), planId: plan.id, planName: ws.topicName,
-      date, dayNum, type:'active_recall',
-      title:'🧠 闭卷回忆',
-      desc:'不看资料，闭卷回忆前一天要点（15分钟）',
-      estMin:15, concepts:[], resRef:''
-    });
-
-    // Feynman every 3 days
-    if(dayNum%3===0){
-      tasks.push({
-        id: uid(), planId: plan.id, planName: ws.topicName,
-        date, dayNum, type:'feynman',
-        title:'🗣 费曼输出',
-        desc:'用自己的话讲解已学概念（20分钟）',
-        estMin:20, concepts:day.concepts||[], resRef:''
-      });
-    }
-
-    // Review tasks
-    reviewQueue.filter(r=>r.reviewDay===dayNum).forEach(r=>{
-      tasks.push({
-        id: uid(), planId: plan.id, planName: ws.topicName,
-        date, dayNum, type:'spaced_review',
-        title:`🔄 间隔复习·${r.topic}`,
-        desc:'艾宾浩斯遗忘曲线节点复习（25分钟）',
-        estMin:25, concepts:[], resRef:''
-      });
-    });
-
-    tasks.forEach(t => D.tasks.push(t));
-  });
-
-  D.syllabusEdits[plan.id] = {};
-  save();
-  renderAll();
-  toast(`✅ 「${ws.topicName}」已生成！\n🧠 DeepSeek V4 Pro 个性化定制 · ${syllabus.length}天大纲\n${analysisText?'📋 '+analysisText:''}`);
+  return null;
 }
 
 function createPlanGeneric(ws, res){
@@ -1551,14 +1642,17 @@ function renderPlans(){
     const total=tasks.length; const pct=total>0?Math.round(done/total*100):0;
     const todayTasks=tasks.filter(t=>t.date===today()&&!t.completed);
     const dueReviews=getDueReviews(plan.id,D.settings.reviewMode).length;
-    return `<div class="plan-card" onclick="openPlanDetail('${plan.id}')">
-      <div class="p-name">${plan.topicName} ${plan.isPersonalized?'<span class="tag tag-gold" style="font-size:10px">🧠 AI定制</span>':''}</div>
+    const isGen = plan.status==='generating';
+    return `<div class="plan-card ${isGen?'generating':''}" onclick="${isGen?'':`openPlanDetail('${plan.id}')`}">
+      <div class="p-name">${plan.topicName} ${plan.isPersonalized?'<span class="tag tag-gold" style="font-size:10px">🧠 AI定制</span>':''} ${isGen?'<span class="tag tag-purple" style="font-size:10px">生成中...</span>':''}</div>
       <div class="p-meta"><span>${plan.totalDays}天</span><span>·</span><span>${plan.dailyMin}分钟/天</span>${plan.isPersonalized?'<span>·</span><span style="color:var(--purple-light)">Pro</span>':''}</div>
-      <div class="progress-bar"><div class="progress-fill progress-purple" style="width:${pct}%"></div></div>
+      ${isGen?`<div style="text-align:center;padding:12px 0"><div class="skeleton" style="height:6px;width:100%;margin-bottom:8px"></div><div class="skeleton skeleton-text short" style="margin:0 auto"></div><p style="font-size:11px;color:var(--text3);margin-top:4px">🧠 AI 正在编排课程...</p></div>`:
+      `<div class="progress-bar"><div class="progress-fill progress-purple" style="width:${pct}%"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
         <span style="color:var(--text2)">进度 ${pct}%</span>
         <span>${todayTasks.length>0?`📋 ${todayTasks.length}个任务`:dueReviews>0?`🔄 ${dueReviews}个复习`:'✅ 今日完成'}</span>
-      </div></div>`;
+      </div>`}
+    </div>`;
   }).join('')}</div>`;
 }
 
