@@ -320,7 +320,7 @@ body{
 // ═══════════════ DATA LAYER ═══════════════
 const STORAGE_KEY = 'studybuddy_v3';
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
-const MODEL = 'deepseek-v4-pro';
+const MODEL = 'deepseek-v4-flash';
 let D = { user:{ charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false,feynmanCount:0,exerciseCount:0,streakDays:0 }, plans:[], tasks:[], reviewItems:[], exerciseRecords:[], achievements:[], apiKey:'', settings:{ reviewMode:'standard',lang:'zh' }, resourceCache:{}, syllabusEdits:{}, tokenUsage:{total:0,count:0} };
 const ACHIEVEMENTS = [
   { key:'streak7',icon:'🗓',title:'坚持一周',desc:'连续7天活跃',reward:'解锁专属主题',cond:p=>p.user.streakDays>=7 },
@@ -465,22 +465,17 @@ async function deepseekCall(messages, opts={}){
 
   const headers = {'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey};
 
-  // Try direct first - DeepSeek supports CORS!
+  // Retry up to 2 times with 2s delay
   let resp = null;
-  try{
-    resp = await fetch(DEEPSEEK_URL, {method:'POST',headers,body:JSON.stringify(body)});
-  }catch(e){
-    console.log('Direct call CORS/network error:', e.message);
-  }
-
-  // If direct failed, try proxy
-  if(!resp || !resp.ok){
+  for(let attempt=0; attempt<2; attempt++){
     try{
-      const proxyUrl = 'https://corsproxy.io/?'+encodeURIComponent(DEEPSEEK_URL);
-      resp = await fetch(proxyUrl, {method:'POST',headers,body:JSON.stringify(body)});
-    }catch(e2){
-      console.log('Proxy also failed:', e2.message);
+      resp = await fetch(DEEPSEEK_URL, {method:'POST',headers,body:JSON.stringify(body)});
+      if(resp && resp.ok) break;
+      console.log(`API attempt ${attempt+1} HTTP ${resp?.status}`);
+    }catch(e){
+      console.log(`API attempt ${attempt+1} failed:`, e.message);
     }
+    if(attempt===0) await new Promise(r=>setTimeout(r,2000));
   }
 
   if(!resp){
@@ -500,7 +495,7 @@ async function deepseekCall(messages, opts={}){
     D.tokenUsage.total = (D.tokenUsage.total||0)+(data.usage.total_tokens||0);
     D.tokenUsage.count = (D.tokenUsage.count||0)+1; save();
     const tokens = data.usage.total_tokens||0;
-    toast(`🤖 V4 Pro · ${tokens.toLocaleString()} Token ≈ ¥${(tokens/1000000).toFixed(4)}`);
+    toast(`🤖 V4 Flash · ${tokens.toLocaleString()} Token ≈ ¥${(tokens/1000000).toFixed(4)}`);
   }
   return data;
 }
@@ -511,7 +506,7 @@ async function testApiConnection(){
   toast('🔍 正在测试连接...');
   const result = await deepseekCall([{role:'user',content:'回复OK即可'}], {maxTokens:5});
   if(result){
-    toast('✅ DeepSeek V4 Pro 连接成功！'+(result.usage?' 消耗 '+result.usage.total_tokens+' Token':''));
+    toast('✅ DeepSeek V4 Flash 连接成功！'+(result.usage?' 消耗 '+result.usage.total_tokens+' Token':''));
   } else {
     toast('❌ 连接失败。请检查：\n1. Key 是否正确（sk-开头）\n2. 是否已充值（最低¥0.5）\n3. 网络是否正常');
   }
@@ -550,8 +545,8 @@ async function searchResources(topic, forceRefresh=false){
     return getLocalResources(topic);
   }
 
-  console.log('[searchResources] Calling DeepSeek V4 Pro for:', topic);
-  toast('🔍 DeepSeek V4 Pro 正在搜索...');
+  console.log('[searchResources] Calling DeepSeek V4 Flash for:', topic);
+  toast('🔍 DeepSeek V4 Flash 正在搜索...');
   const msgs = [
     {role:'system',content:`你是学习资源推荐专家。搜索并推荐8-10个高质量、内容较新的学习资源。
 
@@ -1081,7 +1076,7 @@ function createPlan(){
     BgTaskManager.add({
       type:'generate_plan',
       planId: placeholderPlan.id,
-      title:'🧠 DeepSeek V4 Pro 正在编排课程...',
+      title:'🧠 DeepSeek V4 Flash 正在编排课程...',
       subtitle:'正在搜索「'+res.name+'」的课程结构',
       progressSteps:['搜索课程目录...','分析章节结构...','根据每日'+ws.dailyMin+'分钟拆分学习量...','正在生成个性化大纲...'],
       doneMsg:'「'+ws.topicName+'」的学习计划已生成完毕',
@@ -1311,7 +1306,7 @@ function renderResourceSearch(){
     <span style="margin-left:auto">${filtered.length} 个结果</span>
   </div>
 
-  ${st.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 Pro 搜索中...</p></div>`:''}
+  ${st.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 Flash 搜索中...</p></div>`:''}
 
   <div style="max-height:50vh;overflow-y:auto">
   ${filtered.map((r,i)=>{
@@ -1842,7 +1837,7 @@ async function saveApiKey(){
   const resp = await deepseekCall([{role:'user',content:'Hi'}], {maxTokens:10});
   D.apiKey = key; save();
   document.getElementById('apiModal').style.display = 'none';
-  if(resp){ toast('✅ DeepSeek V4 Pro 连接成功！'); }
+  if(resp){ toast('✅ DeepSeek V4 Flash 连接成功！'); }
   else { toast('⚠️ Key 已保存但连接测试失败，可到设置页重试'); }
   renderAll();
 }
@@ -1924,7 +1919,7 @@ function renderPlans(){
     const isGen = plan.status==='generating';
     return `<div class="plan-card ${isGen?'generating':''}" onclick="${isGen?'':`openPlanDetail('${plan.id}')`}">
       <div class="p-name">${plan.topicName} ${plan.isPersonalized?'<span class="tag tag-gold" style="font-size:10px">🧠 AI定制</span>':''} ${isGen?'<span class="tag tag-purple" style="font-size:10px">生成中...</span>':''}</div>
-      <div class="p-meta"><span>${plan.totalDays}天</span><span>·</span><span>${plan.dailyMin}分钟/天</span>${plan.isPersonalized?'<span>·</span><span style="color:var(--purple-light)">Pro</span>':''}</div>
+      <div class="p-meta"><span>${plan.totalDays}天</span><span>·</span><span>${plan.dailyMin}分钟/天</span>${plan.isPersonalized?'<span>·</span><span style="color:var(--purple-light)">Flash</span>':''}</div>
       ${isGen?`<div style="text-align:center;padding:12px 0"><div class="skeleton" style="height:6px;width:100%;margin-bottom:8px"></div><div class="skeleton skeleton-text short" style="margin:0 auto"></div><p style="font-size:11px;color:var(--text3);margin-top:4px">🧠 AI 正在编排课程...</p></div>`:
       `<div class="progress-bar"><div class="progress-fill progress-purple" style="width:${pct}%"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
