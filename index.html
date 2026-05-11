@@ -291,7 +291,7 @@ body{
 const STORAGE_KEY = 'studybuddy_v3';
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const MODEL = 'deepseek-v4-flash';
-let D = { user:{ charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false,feynmanCount:0,exerciseCount:0,streakDays:0 }, plans:[], tasks:[], reviewItems:[], exerciseRecords:[], achievements:[], apiKey:'', settings:{ reviewMode:'standard',lang:'zh' }, resourceCache:{}, syllabusEdits:{} };
+let D = { user:{ charClass:'apprentice',xp:0,level:1,skillPoints:0,skills:{focus:0,memory:0,insight:0},energy:7,energyFragments:0,lastEnergyReset:null,lastActiveDate:null,onboardingDone:false,feynmanCount:0,exerciseCount:0,streakDays:0 }, plans:[], tasks:[], reviewItems:[], exerciseRecords:[], achievements:[], apiKey:'', settings:{ reviewMode:'standard',lang:'zh' }, resourceCache:{}, syllabusEdits:{}, tokenUsage:{total:0,count:0} };
 const ACHIEVEMENTS = [
   { key:'streak7',icon:'🗓',title:'坚持一周',desc:'连续7天活跃',reward:'解锁专属主题',cond:p=>p.user.streakDays>=7 },
   { key:'streak30',icon:'📅',title:'月度勇士',desc:'连续30天活跃',reward:'解锁知识分享卡',cond:p=>p.user.streakDays>=30 },
@@ -335,48 +335,73 @@ async function deepseekCall(messages, opts={}){
       if(resp.status===402){ toast('💰 API 余额不足，已切换本地模式'); return null; }
       return null;
     }
-    return await resp.json();
+    const data = await resp.json();
+    // Track token usage
+    if(data.usage){
+      D.tokenUsage.total = (D.tokenUsage.total||0) + (data.usage.total_tokens||0);
+      D.tokenUsage.count = (D.tokenUsage.count||0) + 1;
+      save();
+    }
+    return data;
   }catch(e){ return null; }
 }
 
+function getTokenStats(){
+  const t = D.tokenUsage || {total:0,count:0};
+  const cost = (t.total / 1000000 * 1).toFixed(4); // ~¥1 per 1M tokens
+  return `已调用 ${t.count||0} 次 · ${(t.total||0).toLocaleString()} Token · 约 ¥${cost}`;
+}
+
 async function searchResources(topic){
-  // Check cache
   const cacheKey = 'search_'+topic;
   const cached = D.resourceCache[cacheKey];
   if(cached && (Date.now()-cached.time < 86400000)) return cached.data;
 
   if(!D.apiKey) return getLocalResources(topic);
 
+  toast('🔍 DeepSeek V4 正在联网搜索...');
   const msgs = [
-    {role:'system',content:'你是学习资源推荐助手。根据用户的学习主题，搜索并推荐4-6个优质学习资源。返回严格JSON格式：{"resources":[{"name":"...","author":"...","type":"视频课程/书籍/在线教程/练习平台","description":"简短描述","matchScore":95,"url":""}]}'},
-    {role:'user',content:`请为学习主题"${topic}"推荐优质学习资源，覆盖不同难度级别。`}
+    {role:'system',content:`你是学习资源推荐专家。搜索并推荐4-6个优质学习资源。对每个资源必须提供：
+1. name - 资源名称
+2. author - 作者/平台
+3. type - 类型（视频课程/书籍/在线教程/练习平台/文档）
+4. url - 真实可访问的链接（必须来自搜索结果，不能编造）
+5. description - 简短描述（1句话）
+6. pros - 优点（2-3条，每条不超过15字）
+7. cons - 缺点（1-2条，每条不超过15字）
+8. matchScore - 匹配度评分1-100
+
+返回严格JSON：{"resources":[...]}`},
+    {role:'user',content:`搜索学习主题"${topic}"的优质资源，要求链接真实可访问，并给出每个资源的优缺点对比。`}
   ];
-  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:2000});
+  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:2500});
   if(resp){
     try{
       const content = resp.choices[0].message.content;
       const json = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
-      if(json.resources){
+      if(json.resources && json.resources.length>0){
         D.resourceCache[cacheKey] = {data:json.resources,time:Date.now()};
         save();
+        toast(`✅ 搜索完成！找到 ${json.resources.length} 个资源 (${getTokenStats()})`);
         return json.resources;
       }
-    }catch(e){}
+    }catch(e){ console.log('Parse error:',e); }
   }
+  toast('⚠️ 使用本地资源库');
   return getLocalResources(topic);
 }
 
 function getLocalResources(topic){
   const lib = {
-    '高等数学':[{name:'高等数学（同济版）',author:'同济大学数学系',type:'书籍',desc:'经典教材，适合系统学习',matchScore:95},{name:'宋浩老师高数',author:'宋浩',type:'视频课程',desc:'B站热门高数课，讲解清晰',matchScore:92},{name:'MIT 18.01',author:'MIT OCW',type:'在线教程',desc:'麻省理工微积分公开课',matchScore:85}],
-    '英语口语':[{name:'老友记学口语',author:'Friends',type:'视频课程',desc:'通过经典美剧学地道口语',matchScore:90},{name:'英语流利说',author:'流利说',type:'练习平台',desc:'AI 口语评分，每日跟读',matchScore:88},{name:'BBC Learning English',author:'BBC',type:'在线教程',desc:'英式发音标准课程',matchScore:87}],
-    'Python入门':[{name:'Python官方教程',author:'Python.org',type:'在线教程',desc:'官方文档，最权威',matchScore:93},{name:'Python for Everybody',author:'Coursera',type:'视频课程',desc:'零基础Python入门',matchScore:91},{name:'廖雪峰Python教程',author:'廖雪峰',type:'在线教程',desc:'中文经典Python入门教程',matchScore:95}],
+    '高等数学':[{name:'高等数学（同济第七版）',author:'同济大学数学系',type:'书籍',url:'https://book.douban.com/subject/26944646/',description:'国内最经典的高数教材，考研标配',pros:['体系完整严谨','例题丰富','考研指定教材'],cons:['偏理论，不够直观','自学难度较大'],matchScore:95},{name:'宋浩老师《高等数学》',author:'B站 宋浩',type:'视频课程',url:'https://search.bilibili.com/all?keyword=宋浩+高等数学',description:'B站播放量最高的高数课，讲解风趣幽默',pros:['零基础友好','讲解清晰风趣','完全免费'],cons:['课时较多(100+)','深度不如教材'],matchScore:92},{name:'MIT 18.01 微积分',author:'MIT OpenCourseWare',type:'在线教程',url:'https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/',description:'麻省理工经典微积分公开课，英文授课',pros:['世界顶级名校课程','配套习题完善'],cons:['全英文授课','需要科学上网'],matchScore:85}],
+    '英语口语':[{name:'老友记学英语',author:'Friends/NBC',type:'视频课程',url:'https://www.bilibili.com/video/BV1s4411C7sK/',description:'通过经典美剧学地道口语表达',pros:['内容生动有趣','地道美式表达','免费资源多'],cons:['90年代用语部分过时','需自己整理笔记'],matchScore:90},{name:'BBC Learning English',author:'BBC',type:'在线教程',url:'https://www.bbc.co.uk/learningenglish/',description:'BBC官方英语学习平台，英式发音',pros:['官方出品权威','每日更新','完全免费'],cons:['英式发音非主流','语速较快'],matchScore:87},{name:'英语流利说',author:'流利说',type:'练习平台',url:'https://www.liulishuo.com/',description:'AI口语评分+跟读练习',pros:['AI实时反馈发音','游戏化激励'],cons:['免费内容有限','需付费解锁全部'],matchScore:85}],
+    'Python入门':[{name:'Python官方教程',author:'Python Software Foundation',type:'在线教程',url:'https://docs.python.org/zh-cn/3/tutorial/',description:'Python官方中文教程，最权威的入门指南',pros:['官方出品最权威','中文翻译完整','持续更新'],cons:['风格偏技术文档','缺少视频演示'],matchScore:93},{name:'廖雪峰Python教程',author:'廖雪峰',type:'在线教程',url:'https://www.liaoxuefeng.com/wiki/1016959663602400',description:'中文圈最知名的Python入门教程',pros:['中文通俗易懂','示例代码丰富','配套练习'],cons:['部分内容过时','进阶内容偏少'],matchScore:95},{name:'Python for Everybody',author:'Coursera/University of Michigan',type:'视频课程',url:'https://www.coursera.org/specializations/python',description:'全球最受欢迎的Python入门课，中文字幕',pros:['零基础友好','中文字幕','证书认可'],cons:['免费版无作业批改','进度较慢'],matchScore:91}],
   };
   const lower = topic.toLowerCase();
   for(const [k,v] of Object.entries(lib)){
     if(lower.includes(k.toLowerCase()) || k.toLowerCase().includes(lower)) return v;
   }
-  return [{name:`${topic}学习指南`,author:'通用资源',type:'在线教程',desc:'综合学习资料',matchScore:80},{name:`${topic}入门教程`,author:'社区推荐',type:'视频课程',desc:'基础入门内容',matchScore:75},{name:`${topic}进阶实践`,author:'开源社区',type:'练习平台',desc:'动手实践项目',matchScore:70}];
+  return [{name:`${topic}入门指南`,author:'综合推荐',type:'在线教程',url:'',description:'综合多个平台的优质入门资源',pros:['覆盖全面','适合新手'],cons:['需自行筛选'],matchScore:80},{name:`${topic}实践项目`,author:'社区推荐',type:'练习平台',url:'',description:'动手实践，边学边练',pros:['实战导向','积累经验'],cons:['需一定基础'],matchScore:75},{name:`${topic}进阶学习`,author:'专家推荐',type:'书籍',url:'',description:'深入理解核心原理',pros:['深度系统','权威可靠'],cons:['阅读门槛较高'],matchScore:70}];
 }
 
 // ═══════════════ ONBOARDING ═══════════════
@@ -647,13 +672,29 @@ function renderWizS4(){
 function renderWizS5(){
   const ws = wizardState;
   return `<h2>🔍 S6：选择学习资料</h2>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">${D.apiKey?'正在调用 DeepSeek V4 联网搜索...':'使用本地资源库'}</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 联网搜索中...':'📚 本地资源库匹配中...'}</p>
+    ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
     <div id="resourceResults">
-      ${ws.isSearching?'<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">搜索中...</p></div>':
-      ws.searchResults.length>0?ws.searchResults.map((r,i)=>`<div class="resource-card ${ws.selectedResource===i?'selected':''}" onclick="wizardState.selectedResource=${i};renderWizard()"><div class="r-icon">${r.type.includes('视频')?'🎬':r.type.includes('书籍')?'📖':'🌐'}</div><div class="r-info"><div class="r-name">${r.name}</div><div class="r-author">${r.author||''} · ${r.type||''}</div><div style="font-size:12px;color:var(--text2);margin-top:2px">${r.description||r.desc||''}</div></div><div class="r-score">${r.matchScore||r.score||'?'}%</div></div>`).join(''):
-      '<p style="text-align:center;color:var(--text3)">请输入学习主题后自动搜索</p>'}
+      ${ws.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 正在搜索全网资源...</p><p style="font-size:12px;color:var(--text3)">搜索真实课程链接、对比优劣...</p></div>`:
+      ws.searchResults.length>0?ws.searchResults.map((r,i)=>`<div class="resource-card ${ws.selectedResource===i?'selected':''}" onclick="wizardState.selectedResource=${i};renderWizard()" style="flex-direction:column;align-items:stretch">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div class="r-icon">${(r.type||'').includes('视频')?'🎬':(r.type||'').includes('书籍')?'📖':(r.type||'').includes('练习')?'🎮':'🌐'}</div>
+          <div class="r-info">
+            <div class="r-name">${r.name}</div>
+            <div class="r-author">${r.author||''} · ${r.type||''}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">${r.description||r.desc||''}</div>
+            ${r.url?`<a href="${r.url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:4px;font-size:12px;color:var(--purple-light);text-decoration:underline">🔗 打开链接 →</a>`:''}
+          </div>
+          <div class="r-score" style="text-align:center;min-width:40px">${r.matchScore||r.score||'?'}<span style="font-size:10px;display:block">分</span></div>
+        </div>
+        ${(r.pros||r.cons)?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:11px">
+          ${r.pros?`<div style="flex:1"><span style="color:var(--success)">✅ 优点</span><br>${(Array.isArray(r.pros)?r.pros:[r.pros]).map(p=>'• '+p).join('<br>')}</div>`:''}
+          ${r.cons?`<div style="flex:1"><span style="color:var(--danger)">⚠️ 不足</span><br>${(Array.isArray(r.cons)?r.cons:[r.cons]).map(c=>'• '+c).join('<br>')}</div>`:''}
+        </div>`:''}
+      </div>`).join(''):
+      '<p style="text-align:center;color:var(--text3);padding:30px">输入学习主题后自动搜索</p>'}
     </div>
-    <div class="form-group" style="margin-top:12px"><label class="label">或自定义资源</label><div style="display:flex;gap:8px"><input class="input" id="customResInput" placeholder="输入资源名称/网址"><button class="btn btn-sm btn-outline" onclick="addCustomResource()">添加</button></div></div>`;
+    <div class="form-group" style="margin-top:12px"><label class="label">或自定义资源</label><div style="display:flex;gap:8px"><input class="input" id="customResInput" placeholder="输入资源名称或网址"><button class="btn btn-sm btn-outline" onclick="addCustomResource()">添加</button></div></div>`;
 }
 
 function renderWizS6(){
@@ -741,11 +782,69 @@ function createPlan(){
 function toggleTask(taskId){
   const task = D.tasks.find(t=>t.id===taskId);
   if(!task) return;
+
+  // For new_content tasks, require verification
+  if(!task.completed && task.type==='new_content'){
+    showTaskVerification(task);
+    return;
+  }
+
+  completeTask(task);
+}
+
+function showTaskVerification(task){
+  const hasFeynman = D.user.feynmanCount > 0; // simplified check
+  const hasExercises = D.exerciseRecords.some(r=>r.taskId===task.id);
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>📋 确认完成</h2><button onclick="document.getElementById('taskVerifyModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button></div>
+    <p style="color:var(--text2);margin-bottom:16px">「${task.title}」</p>
+    <div class="card" style="border-color:var(--warning)">
+      <p style="font-size:13px;color:var(--warning);margin-bottom:8px">⚠️ 你真的学完了吗？</p>
+      <p style="font-size:13px;color:var(--text2)">建议先完成以下至少一项再确认：</p>
+    </div>
+    <div style="display:flex;gap:8px;margin:12px 0">
+      <button class="btn btn-purple btn-block" onclick="document.getElementById('taskVerifyModal').style.display='none';openFeynman('${task.planId}','${(task.concepts||['概念'])[0]}')">🗣 先做费曼挑战</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-outline btn-block" onclick="document.getElementById('taskVerifyModal').style.display='none';openExercises('${task.planId}','${task.id}')">📝 先做课后习题</button>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">或者回答验证问题：</p>
+      <p style="font-size:13px;color:var(--text);margin-bottom:8px" id="verifyQuestion">你今天学的「${task.title.replace(/.*·\s*/,'')}」主要讲了什么？</p>
+      <input class="input" id="verifyAnswer" placeholder="请简要描述你今天学到的内容...">
+      <button class="btn btn-gold btn-block" style="margin-top:8px" onclick="verifyAndComplete('${task.id}')">✅ 我已认真学完，确认完成</button>
+    </div>`;
+
+  if(!document.getElementById('taskVerifyModal')){
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'taskVerifyModal';
+    modal.innerHTML = `<div class="modal" id="taskVerifyInner"></div>`;
+    modal.addEventListener('click', e => { if(e.target===modal) modal.style.display='none'; });
+    document.body.appendChild(modal);
+  }
+  document.getElementById('taskVerifyInner').innerHTML = html;
+  document.getElementById('taskVerifyModal').style.display = 'flex';
+}
+
+function verifyAndComplete(taskId){
+  const answer = document.getElementById('verifyAnswer')?.value?.trim();
+  if(!answer || answer.length < 2){
+    toast('请至少简单描述一下你学到的内容');
+    return;
+  }
+  document.getElementById('taskVerifyModal').style.display = 'none';
+  const task = D.tasks.find(t=>t.id===taskId);
+  if(task) completeTask(task);
+}
+
+function completeTask(task){
   task.completed = !task.completed;
   if(task.completed){
     task.completedAt = new Date().toISOString(); task.xpEarned = 30;
     useEnergy(); addXp(30, '完成任务');
-    if(task.concepts && task.concepts.length>0) createReviewItems(taskId, task.planId, task.concepts);
+    if(task.concepts && task.concepts.length>0) createReviewItems(task.id, task.planId, task.concepts);
     D.user.lastActiveDate = today(); save(); checkAchievements();
   } else { task.completedAt = null; task.xpEarned = 0; save(); }
   renderAll();
@@ -1183,9 +1282,17 @@ function openPlanDetail(planId){
 
   // Selected resource info
   if(res){
-    html += `<div class="card" style="border-color:var(--purple)"><div style="display:flex;gap:10px;align-items:center">
-      <span style="font-size:28px">📖</span><div><h4 style="font-size:14px">📌 ${res.name||res.title}</h4>
-      <p style="font-size:12px;color:var(--text2)">${res.author||''} · ${res.type||''}</p></div></div></div>`;
+    html += `<div class="card" style="border-color:var(--purple)"><div style="display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:28px">📖</span>
+      <div style="flex:1">
+        <h4 style="font-size:14px">📌 ${res.name||res.title}</h4>
+        <p style="font-size:12px;color:var(--text2)">${res.author||''} · ${res.type||''} · 匹配度 ${res.matchScore||'?'}分</p>
+        ${res.url?`<a href="${res.url}" target="_blank" style="display:inline-block;margin-top:4px;font-size:12px;color:var(--purple-light);text-decoration:underline">🔗 打开课程链接 →</a>`:''}
+        ${res.pros||res.cons?`<div style="margin-top:6px;font-size:11px;display:flex;gap:12px">
+          ${res.pros?`<span style="color:var(--success)">✅ ${Array.isArray(res.pros)?res.pros.join(' · '):res.pros}</span>`:''}
+          ${res.cons?`<span style="color:var(--danger)">⚠️ ${Array.isArray(res.cons)?res.cons.join(' · '):res.cons}</span>`:''}
+        </div>`:''}
+      </div></div></div>`;
   }
 
   // Today's tasks
@@ -1250,8 +1357,19 @@ function renderAdventure(){
 
 function renderSettings(){
   const apiSt=document.getElementById('apiStatus');
-  if(D.apiKey){ apiSt.innerHTML=`<div style="display:flex;align-items:center;gap:8px;color:var(--success)">✅ Key已配置 · ${D.apiKey.slice(0,6)}...${D.apiKey.slice(-4)} <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="D.apiKey='';save();renderSettings();toast('已清除')">清除</button></div>`; }
-  else{ apiSt.innerHTML='<p style="color:var(--text3);font-size:14px">未配置 · 使用本地模式</p>'; }
+  if(D.apiKey){
+    apiSt.innerHTML=`<div style="display:flex;align-items:center;gap:8px;color:var(--success);margin-bottom:8px">✅ Key已配置 · ${D.apiKey.slice(0,6)}...${D.apiKey.slice(-4)} <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="D.apiKey='';save();renderSettings();toast('已清除')">清除</button></div>
+    <div class="card" style="background:var(--purple-bg);border-color:var(--purple);margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px">🤖 DeepSeek V4</span>
+        <span class="tag tag-gold">Flash</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">${getTokenStats()}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">模型: deepseek-v4-flash · 极速响应</div>
+    </div>`;
+  } else {
+    apiSt.innerHTML=`<p style="color:var(--text3);font-size:14px">未配置 · 使用本地模式</p><p style="font-size:12px;color:var(--text3)">配置后可体验 DeepSeek V4 联网搜索、AI 出题、费曼评价</p>`;
+  }
   const modes=[{key:'relaxed',label:'😌 佛系',desc:'每天≤3个复习'},{key:'standard',label:'⚖️ 标准',desc:'SM-2 全量推送'},{key:'hardcore',label:'😈 魔鬼',desc:'全量+关联概念'}];
   document.getElementById('reviewModeSetting').innerHTML=modes.map(m=>`<div class="skill-row" style="cursor:pointer;border-color:${D.settings.reviewMode===m.key?'var(--gold)':'var(--border)'}" onclick="D.settings.reviewMode='${m.key}';save();renderSettings()"><div style="font-size:20px">${m.label.slice(0,2)}</div><div class="skill-info"><div class="skill-name">${m.label}</div><div class="skill-effect">${m.desc}</div></div>${D.settings.reviewMode===m.key?'<span style="color:var(--gold)">✓</span>':''}</div>`).join('');
 }
