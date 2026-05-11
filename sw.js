@@ -1,9 +1,7 @@
 // StudyBuddy v3.3 — Force fresh cache
-const CACHE_NAME = 'studybuddy-v3.4-'+Date.now();
-const ASSETS = ['./index.html', './manifest.json'];
-
+const CACHE_NAME = 'studybuddy-v3.5-'+Date.now();
+// Install - wipe ALL old caches immediately
 self.addEventListener('install', e => {
-  // Delete ALL existing caches immediately
   e.waitUntil(
     caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
     .then(() => caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)))
