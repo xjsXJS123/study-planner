@@ -1331,7 +1331,7 @@ function renderResourceSearch(){
 
   ${st.selected!==null?`<div style="position:sticky;bottom:0;background:var(--card-bg);padding:12px 0;border-top:1px solid var(--border);margin-top:8px">
     <div style="font-size:13px;color:var(--text2);margin-bottom:8px">已选：${st.results[st.selected]?.name||''}</div>
-    <button class="btn btn-gold btn-block" onclick="wizardState.searchResults=resourceSearchState.results;wizardState.selectedResource=resourceSearchState.selected;wizardState.isSearching=false;wizardState.step=5;document.getElementById('resourceSearchModal').style.display='none';document.getElementById('wizardModal').style.display='flex';renderWizard()">✅ 确认选择，返回向导</button>
+    <button class="btn btn-gold btn-block" onclick="wizardState.searchResults=resourceSearchState.results;wizardState.selectedResource=resourceSearchState.selected;wizardState.isSearching=false;wizardState.step=7;document.getElementById('resourceSearchModal').style.display='none';document.getElementById('wizardModal').style.display='flex';renderWizard()">✅ 确认选择，返回向导</button>
   </div>`:''}`;
 
   document.getElementById('resourceSearchInner').innerHTML = html;
