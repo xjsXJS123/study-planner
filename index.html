@@ -1891,7 +1891,7 @@ document.querySelectorAll('.bottom-nav button').forEach(btn=>{
     document.getElementById('fabBtn').style.display=btn.dataset.page==='plans'?'flex':'none';
     if(btn.dataset.page==='plans') renderPlans();
     if(btn.dataset.page==='adventure') renderAdventure();
-    if(btn.dataset.page==='settings') renderSettings();
+    if(btn.dataset.page==='settings'){ renderSettings(); runDiagnostics(); }
   });
 });
 document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o){o.style.display='none';if(o.id==='resourceSearchModal'){document.getElementById('wizardModal').style.display='flex';renderWizard();}}});});
