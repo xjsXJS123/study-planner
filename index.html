@@ -566,7 +566,7 @@ async function searchResources(topic, forceRefresh=false){
 返回严格JSON：{"resources":[...]}`},
     {role:'user',content:`搜索学习主题"${topic}"的优质资源，要求链接真实可访问，并给出每个资源的优缺点对比。`}
   ];
-  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:2500});
+  const resp = await deepseekCall(msgs, {maxTokens:2500});
 
   if(resp){
     try{
@@ -1087,7 +1087,7 @@ async function runPersonalizedGeneration(ws, res){
   let syllabus = null;
   let analysisText = '';
 
-  const resp = await deepseekCall(msgs, {tools:[{type:'web_search'}],maxTokens:4000,usePro:true}); // Pro for deep reasoning
+  const resp = await deepseekCall(msgs, {maxTokens:4000,usePro:true}); // Pro for deep reasoning
   if(resp){
     try{
       const content = resp.choices[0].message.content;
