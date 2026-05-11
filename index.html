@@ -676,11 +676,12 @@ function renderWizS4(){
 function renderWizS5(){
   const ws = wizardState;
   return `<h2>🔍 S6：选择学习资料</h2>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 联网搜索中...':'📚 本地资源库匹配中...'}</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:4px">${D.apiKey?'🤖 DeepSeek V4 Pro 联网搜索中...':'📚 本地资源库匹配中...'}</p>
     ${D.apiKey?`<p style="color:var(--purple-light);font-size:11px;margin-bottom:12px">${getTokenStats()}</p>`:''}
+    <button class="btn btn-outline btn-block" style="margin-bottom:12px" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">🔍 展开全屏搜索（更多结果+筛选）</button>
     <div id="resourceResults">
       ${ws.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 正在搜索全网资源...</p><p style="font-size:12px;color:var(--text3)">搜索真实课程链接、对比优劣...</p></div>`:
-      ws.searchResults.length>0?ws.searchResults.map((r,i)=>`<div class="resource-card ${ws.selectedResource===i?'selected':''}" onclick="wizardState.selectedResource=${i};renderWizard()" style="flex-direction:column;align-items:stretch">
+      ws.searchResults.length>0?ws.searchResults.slice(0,5).map((r,i)=>`<div class="resource-card ${ws.selectedResource===i?'selected':''}" onclick="wizardState.selectedResource=${i};renderWizard()" style="flex-direction:column;align-items:stretch">
         <div style="display:flex;gap:10px;align-items:flex-start">
           <div class="r-icon">${(r.type||'').includes('视频')?'🎬':(r.type||'').includes('书籍')?'📖':(r.type||'').includes('练习')?'🎮':'🌐'}</div>
           <div class="r-info">
@@ -695,7 +696,7 @@ function renderWizS5(){
           ${r.pros?`<div style="flex:1"><span style="color:var(--success)">✅ 优点</span><br>${(Array.isArray(r.pros)?r.pros:[r.pros]).map(p=>'• '+p).join('<br>')}</div>`:''}
           ${r.cons?`<div style="flex:1"><span style="color:var(--danger)">⚠️ 不足</span><br>${(Array.isArray(r.cons)?r.cons:[r.cons]).map(c=>'• '+c).join('<br>')}</div>`:''}
         </div>`:''}
-      </div>`).join(''):
+      </div>`).join('')+`<p style="text-align:center;font-size:12px;color:var(--text3);margin:8px 0">显示前5个 · <span style="color:var(--purple-light);cursor:pointer" onclick="document.getElementById('wizardModal').style.display='none';openResourceSearchPage('${ws.topicName}')">查看全部 ${ws.searchResults.length} 个结果 →</span></p>`:
       '<p style="text-align:center;color:var(--text3);padding:30px">输入学习主题后自动搜索</p>'}
     </div>
     <div class="form-group" style="margin-top:12px"><label class="label">或自定义资源</label><div style="display:flex;gap:8px"><input class="input" id="customResInput" placeholder="输入资源名称或网址"><button class="btn btn-sm btn-outline" onclick="addCustomResource()">添加</button></div></div>`;
@@ -1022,6 +1023,75 @@ function completeTask(task){
     D.user.lastActiveDate = today(); save(); checkAchievements();
   } else { task.completedAt = null; task.xpEarned = 0; save(); }
   renderAll();
+}
+
+// ═══════════════ RESOURCE SEARCH PAGE ═══════════════
+let resourceSearchState = {topic:'',results:[],isSearching:false,selected:null,sortBy:'matchScore',filterType:'all'};
+
+async function openResourceSearchPage(topic){
+  resourceSearchState = {topic,results:[],isSearching:true,selected:null,sortBy:'matchScore',filterType:'all'};
+  document.getElementById('resourceSearchModal').style.display = 'flex';
+  renderResourceSearch();
+  // Search
+  const results = await searchResources(topic);
+  resourceSearchState.results = results; resourceSearchState.isSearching = false;
+  renderResourceSearch();
+}
+
+function renderResourceSearch(){
+  const st = resourceSearchState;
+  const types = ['all','视频课程','书籍','在线教程','练习平台'];
+  const sortOpts = [{k:'matchScore',l:'匹配度'},{k:'name',l:'名称'}];
+
+  let filtered = [...st.results];
+  if(st.filterType!=='all') filtered = filtered.filter(r=>(r.type||'').includes(st.filterType));
+  if(st.sortBy==='name') filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  else filtered.sort((a,b)=>(b.matchScore||0)-(a.matchScore||0));
+
+  const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <button onclick="document.getElementById('resourceSearchModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer">←</button>
+    <h2 style="font-size:16px;margin:0">🔍 搜索学习资源</h2>
+    <span></span></div>
+  <div class="form-group"><input class="input" id="resSearchInput" value="${st.topic}" onchange="resourceSearchState.topic=this.value"><button class="btn btn-sm btn-purple" style="margin-top:8px" onclick="resourceSearchState.isSearching=true;renderResourceSearch();searchResources(resourceSearchState.topic).then(r=>{resourceSearchState.results=r;resourceSearchState.isSearching=false;renderResourceSearch()})">🔍 重新搜索</button></div>
+
+  <!-- Filters -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+    ${types.map(t=>`<span class="tag ${st.filterType===t?'tag-gold':'tag-purple'}" style="cursor:pointer;font-size:12px" onclick="resourceSearchState.filterType='${t}';renderResourceSearch()">${t==='all'?'全部':t}</span>`).join('')}
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;font-size:12px;color:var(--text2)">
+    <span>排序：</span>${sortOpts.map(s=>`<span style="cursor:pointer;color:${st.sortBy===s.k?'var(--gold)':'var(--text2)'}" onclick="resourceSearchState.sortBy='${s.k}';renderResourceSearch()">${s.l}</span>`).join(' · ')}
+    <span style="margin-left:auto">${filtered.length} 个结果</span>
+  </div>
+
+  ${st.isSearching?`<div class="search-loading"><div class="spin">🔍</div><p style="color:var(--text2)">DeepSeek V4 Pro 搜索中...</p></div>`:''}
+
+  <div style="max-height:50vh;overflow-y:auto">
+  ${filtered.map((r,i)=>{
+    const idx = st.results.indexOf(r);
+    return `<div class="resource-card ${st.selected===idx?'selected':''}" onclick="resourceSearchState.selected=${idx};renderResourceSearch()" style="flex-direction:column;align-items:stretch">
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <div style="font-size:28px">${(r.type||'').includes('视频')?'🎬':(r.type||'').includes('书籍')?'📖':'🌐'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600">${r.name} <span style="color:var(--gold);font-size:12px">${r.matchScore||'?'}分</span></div>
+        <div style="font-size:12px;color:var(--text2)">${r.author||''} · ${r.type||''}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${r.description||''}</div>
+        ${r.url?`<a href="${r.url}" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:var(--purple-light)">🔗 访问资源 →</a>`:''}
+      </div>
+    </div>
+    ${(r.pros||r.cons)?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;display:flex;gap:12px">
+      ${r.pros?`<span style="color:var(--success)">✅ ${Array.isArray(r.pros)?r.pros.join(' · '):r.pros}</span>`:''}
+      ${r.cons?`<span style="color:var(--danger)">⚠️ ${Array.isArray(r.cons)?r.cons.join(' · '):r.cons}</span>`:''}
+    </div>`:''}
+  </div>`;
+  }).join('')}
+  </div>
+
+  ${st.selected!==null?`<div style="position:sticky;bottom:0;background:var(--card-bg);padding:12px 0;border-top:1px solid var(--border);margin-top:8px">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">已选：${st.results[st.selected]?.name||''}</div>
+    <button class="btn btn-gold btn-block" onclick="wizardState.searchResults=resourceSearchState.results;wizardState.selectedResource=resourceSearchState.selected;renderWizard();document.getElementById('resourceSearchModal').style.display='none'">✅ 确认选择，返回向导</button>
+  </div>`:''}`;
+
+  document.getElementById('resourceSearchInner').innerHTML = html;
 }
 
 // ═══════════════ COURSE DETAIL WRAPPER ═══════════════
