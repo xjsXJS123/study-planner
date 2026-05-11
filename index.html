@@ -1536,12 +1536,12 @@ function finishFeynman(){
 }
 
 // ═══════════════ PRACTICE EXERCISES ═══════════════
-let exerciseState = {planId:null,taskId:null,exercises:[],answers:{},submitted:false,score:0,correct:0,total:0,isLoading:false};
+let exerciseState = {planId:null,taskId:null,exercises:[],answers:{},selfScores:{},submitted:false,score:0,correct:0,total:0,weakConcepts:[],isLoading:false};
 
 async function openExercises(planId, taskId){
   const task = D.tasks.find(t=>t.id===taskId);
   if(!task) return;
-  exerciseState = {planId, taskId, exercises:[], answers:{}, submitted:false, score:0, correct:0, total:0, isLoading:true};
+  exerciseState = {planId, taskId, exercises:[], answers:{}, selfScores:{}, submitted:false, score:0, correct:0, total:0, weakConcepts:[], isLoading:true};
   document.getElementById('exerciseModal').style.display = 'flex';
   renderExercises();
 
@@ -1604,43 +1604,127 @@ function renderExercises(){
     return;
   }
 
-  const html = `
+  let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h2>📝 课后习题</h2>
       <button onclick="document.getElementById('exerciseModal').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
-    </div>
-    ${ex.submitted?`<div class="card" style="text-align:center;border-color:var(--gold)"><div style="font-size:36px">${ex.score>=80?'🎉':'📚'}</div><h3 style="color:var(--gold)">正确率：${ex.score}%</h3><p style="font-size:13px;color:var(--text2)">${ex.correct}/${ex.total} 题正确</p></div>`:''}
-    ${ex.exercises.map((e,i)=>{
-      let eq = `<div style="font-size:12px;color:var(--purple-light);margin-bottom:4px">${e.type==='choice'?'🔤 选择题':e.type==='fill_blank'?'✍️ 填空题':'📝 简答题'}</div>`;
-      if(e.type==='choice'){
-        eq += e.choices.map(c=>{
-          let cls = 'choice-btn';
-          if(ex.submitted && ex.answers[e.id]){
-            if(c.startsWith(e.correct)) cls += ' correct';
-            else if(c.startsWith(ex.answers[e.id])) cls += ' wrong';
-          }
-          return `<button class="${cls}" onclick="${ex.submitted?'':`exerciseState.answers[${e.id}]='${c[0]}';renderExercises()`}" style="${ex.answers[e.id]===c[0]&&!ex.submitted?'border-color:var(--gold);background:rgba(255,215,0,0.05)':''}">${c}</button>`;
-        }).join('');
-        if(ex.submitted) eq += `<div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(16,185,129,0.1);font-size:13px;color:var(--success)">💡 ${e.explanation}</div>`;
-      } else {
-        eq += `<input class="input" placeholder="输入你的答案..." oninput="exerciseState.answers[${e.id}]=this.value" ${ex.submitted?'disabled':''}>`;
-        if(ex.submitted) eq += `<div style="margin-top:8px;font-size:13px;color:var(--text2)">参考答案：${e.correctAnswer||e.correct}</div>`;
+    </div>`;
+
+  // Result summary after submission
+  if(ex.submitted){
+    const grade = ex.score>=90?'🌟 优秀':ex.score>=70?'👍 良好':ex.score>=50?'📚 加油':'💪 继续努力';
+    html += `<div class="card" style="text-align:center;border-color:${ex.score>=70?'var(--gold)':'var(--warning)'};margin-bottom:16px">
+      <div style="font-size:48px">${ex.score>=90?'🏆':ex.score>=70?'✅':'📖'}</div>
+      <h3 style="color:var(--gold)">${grade} · ${ex.score}分</h3>
+      <p style="font-size:14px;color:var(--text2)">${ex.correct}/${ex.total} 题正确</p>
+      <div style="margin-top:8px;font-size:12px;color:var(--text3)">
+        ${ex.score>=90?'所有知识点掌握扎实！':'薄弱环节：'+(ex.weakConcepts||[]).join('、')||'建议回顾相关概念'}
+      </div>
+    </div>`;
+  }
+
+  // Each question
+  ex.exercises.forEach((e,i)=>{
+    const userAns = ex.answers[e.id] || '';
+    const isCorrect = ex.submitted && checkAnswer(e, userAns);
+    const typeIcon = e.type==='choice'?'🔤':e.type==='fill_blank'?'✍️':e.type==='short_answer'?'📝':e.type==='calculation'?'🧮':'📝';
+    const diffTag = e.difficulty==='easy'?'🟢':e.difficulty==='medium'?'🟡':'🔴';
+
+    html += `<div class="exercise-card" style="${ex.submitted?(isCorrect?'border-color:var(--success)':'border-color:var(--danger)'):''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;color:var(--purple-light)">${typeIcon} ${e.type==='choice'?'选择':e.type==='fill_blank'?'填空':e.type==='short_answer'?'简答':'计算'} · ${diffTag} ${e.difficulty||'medium'}</span>
+        ${ex.submitted?`<span style="font-size:12px;font-weight:600;color:${isCorrect?'var(--success)':'var(--danger)'}">${isCorrect?'✓ 正确':'✗ 错误'}</span>`:''}
+      </div>
+      <div class="q-title" style="margin-bottom:10px">${i+1}. ${e.question}</div>`;
+
+    // Choice
+    if(e.type==='choice'){
+      html += e.choices.map(c=>{
+        let cls = 'choice-btn';
+        if(ex.submitted){
+          if(c.startsWith(e.correct)) cls += ' correct';
+          else if(c.startsWith(userAns) && !isCorrect) cls += ' wrong';
+        }
+        const sel = userAns===c[0] && !ex.submitted;
+        return `<button class="${cls}" onclick="${ex.submitted?'':`exerciseState.answers[${e.id}]='${c[0]}';renderExercises()`}" style="${sel?'border-color:var(--gold);background:rgba(255,215,0,0.05)':''}">${c}</button>`;
+      }).join('');
+      if(ex.submitted){
+        html += `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:${isCorrect?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)'};font-size:13px">
+          <div style="font-weight:600;color:${isCorrect?'var(--success)':'var(--danger)'};margin-bottom:4px">${isCorrect?'✅ 回答正确':'❌ 正确答案是 '+e.correct+'，你选了 '+userAns}</div>
+          <div style="color:var(--text2);line-height:1.5">💡 ${e.explanation}</div>
+          ${e.relatedConcept?`<div style="margin-top:4px;font-size:11px;color:var(--purple-light)">关联知识点：${e.relatedConcept}</div>`:''}
+        </div>`;
       }
-      return `<div class="exercise-card"><div class="q-title">${i+1}. ${e.question}</div>${eq}</div>`;
-    }).join('')}
-    ${!ex.submitted?`<button class="btn btn-gold btn-block" onclick="submitExercises()">📝 提交答案</button>`:
-    `<button class="btn btn-gold btn-block" style="margin-top:12px" onclick="finishExercises()">完成 (+20 XP)</button>`}
-  `;
+    }
+    // Fill blank
+    else if(e.type==='fill_blank'){
+      html += `<input class="input" placeholder="输入你的答案..." oninput="exerciseState.answers[${e.id}]=this.value" value="${userAns}" ${ex.submitted?'disabled':''}>`;
+      if(ex.submitted){
+        html += `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:${isCorrect?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)'};font-size:13px">
+          <div style="font-weight:600;color:${isCorrect?'var(--success)':'var(--danger)'};margin-bottom:4px">${isCorrect?'✅ 回答正确！':'❌ 你的答案：'+userAns}</div>
+          <div style="color:var(--text2)">📋 参考答案：${e.correct||e.correctAnswer||''}</div>
+          <div style="color:var(--text2);margin-top:4px;line-height:1.5">💡 ${e.explanation}</div>
+        </div>`;
+      }
+    }
+    // Short answer
+    else {
+      html += `<textarea class="input" rows="3" placeholder="写下你的答案..." oninput="exerciseState.answers[${e.id}]=this.value" ${ex.submitted?'disabled':''}>${userAns}</textarea>`;
+      if(ex.submitted){
+        html += `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(16,185,129,0.08);font-size:13px">
+          <div style="font-weight:600;color:var(--success);margin-bottom:4px">📋 参考答案</div>
+          <div style="color:var(--text2);line-height:1.5">${e.referenceAnswer||e.correctAnswer||e.correct||'无参考答案'}</div>
+          ${e.scoringGuide?`<div style="margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(255,215,0,0.08);font-size:12px;color:var(--gold)">📊 评分指南：${e.scoringGuide}</div>`:''}
+          <div style="margin-top:8px;font-size:12px;color:var(--text3)">请对照参考答案和评分指南自我评估。这道题的目的不是打分，而是帮你发现理解上的盲区。</div>
+          <div style="display:flex;gap:8px;margin-top:6px">${[1,2,3].map(s=>`<button class="btn btn-sm ${ex.selfScores&&ex.selfScores[e.id]===s?'btn-gold':'btn-outline'}" onclick="if(!exerciseState.selfScores)exerciseState.selfScores={};exerciseState.selfScores[${e.id}]=${s};renderExercises()">⭐${s}分</button>`).join('')}</div>
+        </div>`;
+      }
+    }
+
+    html += `</div>`;
+  });
+
+  if(!ex.submitted){
+    html += `<button class="btn btn-gold btn-block" onclick="submitExercises()">📝 提交答案</button>`;
+  } else {
+    html += `<button class="btn btn-gold btn-block" style="margin-top:12px" onclick="finishExercises()">✅ 完成 (+20 XP)</button>`;
+  }
+
   document.getElementById('exerciseInner').innerHTML = html;
+}
+
+function checkAnswer(exercise, userAnswer){
+  if(!userAnswer) return false;
+  if(exercise.type==='choice'){
+    return userAnswer === exercise.correct[0];
+  }
+  if(exercise.type==='fill_blank'){
+    const ans = userAnswer.trim().toLowerCase();
+    const ref = (exercise.correct||exercise.correctAnswer||'').toLowerCase();
+    // Fuzzy match: check if answer contains key terms from reference
+    const keyTerms = ref.replace(/[，,、。.]/g,' ').split(/\s+/).filter(t=>t.length>=2);
+    const matchCount = keyTerms.filter(t=>ans.includes(t)).length;
+    return matchCount >= Math.max(1, keyTerms.length * 0.4);
+  }
+  // Short answer: always show reference, user self-scores
+  return true;
 }
 
 function submitExercises(){
   const ex = exerciseState;
   let correct = 0;
-  ex.exercises.forEach(e => { if(ex.answers[e.id] === e.correct[0]) correct++; });
-  ex.total = ex.exercises.length; ex.correct = correct;
+  ex.weakConcepts = [];
+  ex.exercises.forEach(e => {
+    const isCorrect = checkAnswer(e, ex.answers[e.id]||'');
+    e._correct = isCorrect;
+    if(isCorrect) correct++;
+    else if(e.relatedConcept) ex.weakConcepts.push(e.relatedConcept);
+  });
+  ex.total = ex.exercises.length;
+  ex.correct = correct;
   ex.score = Math.round((correct/ex.total)*100);
   ex.submitted = true;
+  ex.selfScores = {};
   renderExercises();
 }
 
@@ -1651,11 +1735,11 @@ function finishExercises(){
   D.exerciseRecords.push({
     id:uid(), planId:exerciseState.planId, taskId:exerciseState.taskId,
     date:today(), score:exerciseState.score, total:exerciseState.total, correct:exerciseState.correct,
-    weakConcepts: exerciseState.score<80?['需要巩固的概念']:[]
+    weakConcepts: exerciseState.weakConcepts||[]
   });
   document.getElementById('exerciseModal').style.display = 'none';
   save(); checkAchievements(); renderAll();
-  toast(`📝 习题完成！正确率 ${exerciseState.score}% +${xp} XP`);
+  toast(`📝 习题完成！${exerciseState.score}分 +${xp} XP`);
 }
 
 // ═══════════════ REVIEW ═══════════════
