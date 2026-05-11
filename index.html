@@ -443,68 +443,57 @@ function cancelBgTask(){
   }
 }
 
-// ═══════════════ DEEPSEEK API ═══════════════
-let apiCallFailed = false; // Track if API is reachable
-
 async function deepseekCall(messages, opts={}){
-  if(!D.apiKey) return null;
+  if(!D.apiKey){ return null; }
+  if(!D.apiKey.startsWith('sk-')){
+    toast('⚠️ API Key 格式不正确（应以 sk- 开头），请在设置中重新配置');
+    return null;
+  }
   const { tools, maxTokens=1000, temperature=0.7 } = opts;
   const body = { model:MODEL, messages, max_tokens:maxTokens, temperature };
   if(tools) body.tools = tools;
 
-  const doFetch = async (url) => {
-    return fetch(url, {
+  // CORS note: Browser blocks direct API calls. Use proxy.
+  const CORS_PROXY = 'https://corsproxy.io/?';
+  const apiUrl = CORS_PROXY + encodeURIComponent(DEEPSEEK_URL);
+
+  try{
+    const resp = await fetch(apiUrl, {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+D.apiKey},
       body:JSON.stringify(body)
     });
-  };
-
-  // Try direct call first
-  let resp = null;
-  let lastError = '';
-  try{
-    resp = await doFetch(DEEPSEEK_URL);
     if(!resp.ok){
-      if(resp.status===402){ toast('💰 API 余额不足，请充值后重试'); apiCallFailed=true; return null; }
-      if(resp.status===401){ toast('🔑 API Key 无效，请检查设置'); apiCallFailed=true; return null; }
-      lastError = 'HTTP '+resp.status;
+      if(resp.status===402){ toast('💰 API 余额不足，请充值'); return null; }
+      if(resp.status===401){ toast('🔑 API Key 无效，请到 platform.deepseek.com 获取'); return null; }
+      toast('⚠️ API 错误 ('+resp.status+')，已切换本地模式');
+      return null;
     }
+    const data = await resp.json();
+    if(data.usage){
+      D.tokenUsage.total = (D.tokenUsage.total||0)+(data.usage.total_tokens||0);
+      D.tokenUsage.count = (D.tokenUsage.count||0)+1; save();
+      const tokens = data.usage.total_tokens||0;
+      toast(`🤖 V4 Pro · ${tokens.toLocaleString()} Token ≈ ¥${(tokens/1000000).toFixed(4)}`);
+    }
+    return data;
   }catch(e){
-    lastError = e.message||'网络错误';
-    console.log('Direct API call failed:', lastError);
-  }
-
-  // If direct call failed (CORS/network), try CORS proxy
-  if(!resp || !resp.ok){
-    try{
-      const proxyUrl = 'https://corsproxy.io/?'+encodeURIComponent(DEEPSEEK_URL);
-      resp = await doFetch(proxyUrl);
-      if(!resp.ok){ lastError = 'Proxy HTTP '+resp.status; }
-    }catch(e2){
-      lastError = 'CORS+Proxy: '+(e2.message||'failed');
-      console.log('Proxy call also failed:', lastError);
-    }
-  }
-
-  if(!resp || !resp.ok){
-    if(!apiCallFailed){
-      toast('⚠️ 无法连接 DeepSeek API（浏览器跨域限制），已使用本地资源库。建议通过后端代理调用。');
-      apiCallFailed = true;
-    }
+    console.log('API error:', e.message);
+    toast('🌐 网络连接失败，使用本地资源库');
     return null;
   }
+}
 
-  apiCallFailed = false;
-  const data = await resp.json();
-  if(data.usage){
-    D.tokenUsage.total = (D.tokenUsage.total||0)+(data.usage.total_tokens||0);
-    D.tokenUsage.count = (D.tokenUsage.count||0)+1; save();
-    const tokens = data.usage.total_tokens||0;
-    const cost = (tokens/1000000).toFixed(4);
-    toast(`🤖 DeepSeek V4 Pro · 消耗 ${tokens.toLocaleString()} Token ≈ ¥${cost}`);
+async function testApiConnection(){
+  if(!D.apiKey){ toast('请先配置 API Key'); return; }
+  if(!D.apiKey.startsWith('sk-')){ toast('⚠️ Key 格式错误，应以 sk- 开头'); return; }
+  toast('🔍 正在测试连接...');
+  const result = await deepseekCall([{role:'user',content:'回复OK即可'}], {maxTokens:5});
+  if(result){
+    toast('✅ DeepSeek V4 Pro 连接成功！'+(result.usage?' 消耗 '+result.usage.total_tokens+' Token':''));
+  } else {
+    toast('❌ 连接失败。请检查：\n1. Key 是否正确（sk-开头）\n2. 是否已充值（最低¥0.5）\n3. 网络是否正常');
   }
-  return data;
 }
 
 function getTokenStats(){
@@ -1608,21 +1597,17 @@ function renderApiWizard(){
 async function saveApiKey(){
   const key = document.getElementById('apiKeyInput').value.trim();
   if(!key){ toast('请粘贴 API Key'); return; }
-  if(!key.startsWith('sk-')) toast('⚠️ Key 格式可能不正确（应以 sk- 开头）');
-
-  // Test the key
-  const resp = await deepseekCall([{role:'user',content:'Hi'}], {maxTokens:10});
-  if(resp){
-    D.apiKey = key; save();
-    document.getElementById('apiModal').style.display = 'none';
-    toast('✅ 验证成功！API Key 已保存');
-  } else if(key.startsWith('sk-')){
-    D.apiKey = key; save();
-    document.getElementById('apiModal').style.display = 'none';
-    toast('⚠️ 验证失败但已保存，可稍后重试');
-  } else {
-    toast('❌ 验证失败，请检查 Key 是否正确');
+  if(!key.startsWith('sk-')){
+    toast('⚠️ 这不是 DeepSeek API Key！Key 应以 sk- 开头。请到 platform.deepseek.com 获取');
+    return;
   }
+
+  toast('🔍 正在通过 CORS 代理验证...');
+  const resp = await deepseekCall([{role:'user',content:'Hi'}], {maxTokens:10});
+  D.apiKey = key; save();
+  document.getElementById('apiModal').style.display = 'none';
+  if(resp){ toast('✅ DeepSeek V4 Pro 连接成功！'); }
+  else { toast('⚠️ Key 已保存但连接测试失败，可到设置页重试'); }
   renderAll();
 }
 
@@ -1786,17 +1771,32 @@ function renderAdventure(){
 function renderSettings(){
   const apiSt=document.getElementById('apiStatus');
   if(D.apiKey){
-    apiSt.innerHTML=`<div style="display:flex;align-items:center;gap:8px;color:var(--success);margin-bottom:8px">✅ Key已配置 · ${D.apiKey.slice(0,6)}...${D.apiKey.slice(-4)} <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="D.apiKey='';save();renderSettings();toast('已清除')">清除</button></div>
+    const isSk = D.apiKey.startsWith('sk-');
+    apiSt.innerHTML=`<div style="display:flex;align-items:center;gap:8px;color:${isSk?'var(--success)':'var(--danger)'};margin-bottom:8px">
+      ${isSk?'✅':'⚠️'} Key: ${D.apiKey.slice(0,6)}...${D.apiKey.slice(-4)}
+      ${!isSk?'<span class="tag tag-danger" style="font-size:10px">格式错误</span>':''}
+      <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="D.apiKey='';D.tokenUsage={total:0,count:0};save();renderSettings();toast('已清除')">清除</button>
+    </div>
+    ${!isSk?`<p style="font-size:12px;color:var(--danger);margin-bottom:8px">Key 应以 sk- 开头。请到 <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--purple-light)">platform.deepseek.com</a> 获取</p>`:''}
     <div class="card" style="background:var(--purple-bg);border-color:var(--purple);margin-top:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px">🤖 DeepSeek V4</span>
-        <span class="tag tag-gold">Pro</span>
+        <span style="font-size:13px">🤖 DeepSeek V4 Pro</span>
+        <span class="tag tag-gold">CORS代理</span>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">${getTokenStats()}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px">模型: deepseek-v4-pro · 深度推理</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">通过 CORS 代理调用 · corsproxy.io</div>
+      <button class="btn btn-sm btn-outline btn-block" style="margin-top:8px" onclick="testApiConnection()">🔍 测试连接</button>
     </div>`;
   } else {
-    apiSt.innerHTML=`<p style="color:var(--text3);font-size:14px">未配置 · 使用本地模式</p><p style="font-size:12px;color:var(--text3)">配置后可体验 DeepSeek V4 联网搜索、AI 出题、费曼评价</p>`;
+    apiSt.innerHTML=`<p style="color:var(--text3);font-size:14px;margin-bottom:8px">未配置 · 使用本地模式</p>
+    <p style="font-size:12px;color:var(--text2)">配置 DeepSeek API Key 后解锁：</p>
+    <ul style="font-size:12px;color:var(--text3);padding-left:16px;margin:4px 0 8px">
+      <li>🔍 联网搜索真实课程资源</li>
+      <li>🧠 AI 个性化大纲生成</li>
+      <li>📝 AI 自动生成习题</li>
+      <li>🗣 AI 费曼挑战评价</li>
+    </ul>
+    <p style="font-size:11px;color:var(--text3)">获取 Key：<a href="https://platform.deepseek.com" target="_blank" style="color:var(--purple-light)">platform.deepseek.com</a> → 充值¥0.5即可</p>`;
   }
   const modes=[{key:'relaxed',label:'😌 佛系',desc:'每天≤3个复习'},{key:'standard',label:'⚖️ 标准',desc:'SM-2 全量推送'},{key:'hardcore',label:'😈 魔鬼',desc:'全量+关联概念'}];
   document.getElementById('reviewModeSetting').innerHTML=modes.map(m=>`<div class="skill-row" style="cursor:pointer;border-color:${D.settings.reviewMode===m.key?'var(--gold)':'var(--border)'}" onclick="D.settings.reviewMode='${m.key}';save();renderSettings()"><div style="font-size:20px">${m.label.slice(0,2)}</div><div class="skill-info"><div class="skill-name">${m.label}</div><div class="skill-effect">${m.desc}</div></div>${D.settings.reviewMode===m.key?'<span style="color:var(--gold)">✓</span>':''}</div>`).join('');
